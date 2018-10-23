@@ -14,3 +14,18 @@ julia --project=. -e "using Pkg; Pkg.instantiate(); Pkg.API.precompile()"
 ```bash
 mpirun -n 4 --oversubscribe julia --project=. src/shallow_water.jl
 ```
+
+## Running on the supercloud
+
+`run.sc.sh` is setup to start 32 mpi ranks per default, using up two full nodes. It is important that you run the `module load` steps each time and take care to `instantiate` the project, before starting the job since the compute nodes have no access to internet and you would hit the joint cache from all nodes as once.
+
+```bash
+module load julia-1.0
+module load mpi/openmpi-x86_64
+
+# Run this when you need to update packages
+export JULIA_DEPOT_PATH="${HOME}/.julia"
+julia --project=. -e "using Pkg; Pkg.instantiate(); Pkg.API.precompile()"
+
+sbatch run.sc.sh
+```
