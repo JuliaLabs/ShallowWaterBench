@@ -2,4 +2,5 @@
 *.jl.*.cov
 *.jl.mem
 *.vtu
+*.out
 deps/deps.jl
