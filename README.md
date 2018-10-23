@@ -29,3 +29,19 @@ julia --project=. -e "using Pkg; Pkg.instantiate(); Pkg.API.precompile()"
 
 sbatch run.sc.sh
 ```
+
+### Running the GPU code
+
+Note that we are using stacked environments here
+```bash
+module load julia-1.0
+module load cuda-latest
+module load mpi/openmpi-x86_64
+
+# Run this when you need to update packages
+export JULIA_DEPOT_PATH="${HOME}/.julia"
+julia --project=.      -e "using Pkg; Pkg.instantiate(); Pkg.API.precompile()"
+julia --project=gpuenv -e "using Pkg; Pkg.instantiate(); Pkg.API.precompile()"
+
+sbatch run.sc.gpu.sh
+```
