@@ -17,31 +17,35 @@ mpirun -n 4 --oversubscribe julia --project=. src/shallow_water.jl
 
 ## Running on the supercloud
 
-`run.sc.sh` is setup to start 32 mpi ranks per default, using up two full nodes. It is important that you run the `module load` steps each time and take care to `instantiate` the project, before starting the job since the compute nodes have no access to internet and you would hit the joint cache from all nodes as once.
+### Setup
+
+Only necessary to run when updating packages.
 
 ```bash
 module load julia-1.0
 module load mpi/openmpi-x86_64
+module load cuda-latest
 
-# Run this when you need to update packages
 export JULIA_DEPOT_PATH="${HOME}/.julia"
-julia --project=. -e "using Pkg; Pkg.instantiate(); Pkg.API.precompile()"
+julia --project=.      -e "using Pkg; Pkg.instantiate(); Pkg.API.precompile()"
+julia --project=gpuenv -e "using Pkg; Pkg.instantiate(); Pkg.API.precompile()"
+```
 
+### Running normally 
+
+`run.sc.sh` is setup to start 32 mpi ranks per default,
+using up two full nodes. It is important that you run the setup before starting
+the job and after the `Manifest.toml` got updated since the compute nodes don't
+have access to the internet.
+
+```bash
 sbatch run.sc.sh
 ```
 
 ### Running the GPU code
+`run.sc.gpu.sh` is setup to use one node with 4 GPUs, in order to pull in the
+GPU functionality we are using a stacked environment.
 
-Note that we are using stacked environments here
 ```bash
-module load julia-1.0
-module load cuda-latest
-module load mpi/openmpi-x86_64
-
-# Run this when you need to update packages
-export JULIA_DEPOT_PATH="${HOME}/.julia"
-julia --project=.      -e "using Pkg; Pkg.instantiate(); Pkg.API.precompile()"
-julia --project=gpuenv -e "using Pkg; Pkg.instantiate(); Pkg.API.precompile()"
-
 sbatch run.sc.gpu.sh
 ```

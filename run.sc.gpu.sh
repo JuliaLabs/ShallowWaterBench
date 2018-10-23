@@ -8,6 +8,12 @@
 
 SRCDIR=`dirname $BASH_SOURCE`
 
+# Initialize Modules
+source /usr/share/Modules/init/sh
+
+module load mpi/openmpi-x86_64
+module load julia-1.0
+
 export JULIA_DEPOT_PATH="${HOME}/.julia"
 export JULIA_LOAD_PATH="@,${SRCDIR}/gpuenv,@stdlib"
 export OPENBLAS_NUM_THREADS=1
