@@ -23,9 +23,11 @@ const mpirank = MPI.Comm_rank(mpicomm)
 const mpisize = MPI.Comm_size(mpicomm)
 
 if mpirank == 0
+    @show mpisize
     @show DFloat
     @show N
     @show brickN
+    @show dim
     @show tend
     @show δnl
     @show gravity
@@ -119,7 +121,7 @@ function main(mesh, Q, Δ, bathymetry, coord, metric, D, ω, vmapM, vmapP)
             MPI.Waitall!(recvreq)
 
             # #### Unpack data from receive buffer
-            # The inverse of the Pack datat to send buffer. We now unpack the receive buffer in order to use it in the RHS
+            # The inverse of the Pack data to send buffer. We now unpack the receive buffer in order to use it in the RHS
             # flux integral.
             for elems ∈ mesh.nabrtorecv
                 for (nf, f) ∈ enumerate(Q)
