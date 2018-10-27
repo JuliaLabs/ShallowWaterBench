@@ -4,7 +4,9 @@ using Base.Cartesian
 # A is data type
 abstract type Mesh{N} end
 
-struct PeriodicCartesianMesh{N} <: Mesh{N}
+abstract type CartesianMesh{N} end
+
+struct PeriodicCartesianMesh{N} <: CartesianMesh{N}
     inds::CartesianIndices{N}
 end
 
@@ -20,8 +22,12 @@ Base.getindex(::CartesianNeighbors{N}, i::Int) where {N} = CartesianIndex(ntuple
 
 faces(cell, mesh::PeriodicCartesianMesh{N}) where {N} = CartesianNeighbors{N}()
 
-neighbor(cell, face, mesh::PeriodicCartesianMesh{N}) = cell + face
+Base.mod(x::T, y::AbstractUnitRange{T}) where {T<:Integer} = y[mod1(x - y[1] + 1, length(y))]
+Base.mod(x::CartesianIndex{N}, y::CartesianIndices{N}) where {N} = CartesianIndex(ntuple(n->mod(x[n], axes(y)[n]), N))
 
-opposite(face, mesh::PeriodicCartesianMesh{N}) = face * -1
+neighbor(cell, face, mesh::PeriodicCartesianMesh) =
+  (cell + face) in mesh.inds ? cell + face : mod(cell + face, mesh.inds)
 
-neighbors(cell, mesh::Mesh{N}) = map(face -> neighbor(cell, face, mesh), faces(cell, mesh))
+opposite(face, mesh::PeriodicCartesianMesh) = face * -1
+
+neighbors(cell, mesh::Mesh) = map(face -> neighbor(cell, face, mesh), faces(cell, mesh))
