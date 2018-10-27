@@ -12,7 +12,7 @@ julia --project=. -e "using Pkg; Pkg.instantiate(); Pkg.API.precompile()"
 ## Running locally
 
 ```bash
-mpirun -n 4 --oversubscribe julia --project=. src/shallow_water.jl
+mpirun -n 4 --oversubscribe julia --project=. original/shallow_water.jl
 ```
 
 ## Running on the supercloud
