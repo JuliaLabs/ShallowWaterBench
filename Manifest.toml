@@ -15,7 +15,7 @@ version = "0.5.2"
 
 [[Canary]]
 deps = ["MPI"]
-git-tree-sha1 = "e72ba7c367053766f37170b848e482080dee1025"
+git-tree-sha1 = "d0e19eb8813a1da0038b66d33ee36ccdad7c5d45"
 repo-rev = "master"
 repo-url = "https://github.com/climate-machine/Canary.jl"
 uuid = "f104530e-ab06-11e8-1c1e-6d6e4a5d5c91"
