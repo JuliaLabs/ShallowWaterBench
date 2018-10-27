@@ -25,10 +25,10 @@ Base.@pure function face2idx(arr, f)
     end
 end
 
-function face(m::Mesh, e::RectElem, f)
+function face(e::RectElem, f, m::Mesh)
     e.coeffs[face2idx(e.coeffs, f)...]
 end
 
-Base.@inline function faceview(e::RectElem, f, m::Mesh)
-    view(e.coeffs, face2idx(e.coeffs, f)...)
+function face(e::RectElem, f)
+    e.coeffs[face2idx(e.coeffs, f)...]
 end
