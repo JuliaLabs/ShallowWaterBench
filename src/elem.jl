@@ -41,7 +41,7 @@ function Base.show(io::IO, e::RectFunk)
     show(io, MIME"text/plain"(), e.coeffs)
 end
 
-Base.@pure function face2idx(arr, f)
+function face2idx(arr, f)
     @assert ndims(arr) == length(f)
     ntuple(ndims(arr)) do i
         dir = f[i]
