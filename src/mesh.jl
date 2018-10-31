@@ -1,8 +1,9 @@
 module Meshing
     export Mesh, CartesianMesh, PeriodicCartesianMesh
-    export faces, neighbor, neighbors, overelems
+    export faces, neighbor, neighbors, overelems, storage
 
 using Base.Cartesian
+using OffsetArrays
 
 """
     Mesh{N}
@@ -44,6 +45,7 @@ neighbors(elem, mesh::Mesh) = map(face -> neighbor(elem, face, mesh), faces(elem
 overelems(f, mesh::Mesh, args...) = throw(MethodError(overelems, (typeof(f), typeof(mesh), typeof(args))))
 
 elemindices(mesh::Mesh) = throw(MethodError(elemindices, (typeof(Mesh),)))
+storage(::Type{T}, mesh::Mesh) where T = throw(MethodError(storage, (T, typeof(Mesh),)))
 
 """
     CartesianMesh{N} <: Mesh{N} 
@@ -68,6 +70,7 @@ Base.iterate(cn::CartesianNeighbors, i) = i <= length(cn) ? (cn[i], i+1) : nothi
 Base.IteratorSize(::CartesianNeighbors) = Base.HasShape{1}()	
 Base.eltype(cn::CartesianNeighbors{N}) where N = CartesianIndex{N}
 Base.map(f::F, cn::CartesianNeighbors{N}) where {F,N} = ntuple(i->f(cn[i]), 2N)
+
 """
     PeriodicCartesianMesh{N} <: CartesianMesh{N}
 
@@ -89,6 +92,12 @@ function overelems(f::F, mesh::PeriodicCartesianMesh, args...) where F
     for I in elemindices(mesh)
         f(I, mesh, args...)
     end
+end
+
+function storage(::Type{T}, mesh::PeriodicCartesianMesh{N}) where {T, N}
+    inds = elemindices(mesh)
+    underlaying = Array{Int64}(undef, map(length, axes(inds))...)
+    return OffsetArray(underlaying, inds.indices)
 end
 
 end # module
