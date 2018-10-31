@@ -4,7 +4,7 @@ module PartionedMeshing
     export PartionedCartesianMesh, CartesianPartition, CPU, GPU
     export ghostboundary, backend, locate, rankindices
 
-    import Meshing: cellindicies
+    import Meshing: elemindicies
 
 abstract type Backend end
 struct CPU <: Backend end
@@ -21,9 +21,9 @@ struct PartionedCartesianMesh{B::Backend, N, M::CartesianMesh{N}} <: CartesianMe
     parent :: M
 end
 
-Meshing.neighbor(cell, face, mesh::PartionedCartesianMesh) = cell + face
+Meshing.neighbor(elem, face, mesh::PartionedCartesianMesh) = elem + face
 Base.parentindicies(mesh::PartionedCartesianMesh) = mesh.inds
-cellindicies(mesh::PartionedCartesianMesh) = CartesianIndices(axes(parentindices(mesh)))
+elemindicies(mesh::PartionedCartesianMesh) = CartesianIndices(axes(parentindices(mesh)))
 
 backend(::PartionedCartesianMesh{B}) where B = B()
 function Meshing.overelems(f, mesh::PartionedCartesianMesh, args...)
@@ -31,9 +31,8 @@ function Meshing.overelems(f, mesh::PartionedCartesianMesh, args...)
 end
 
 function Meshing.overelems(::CPU, f::F, mesh::PartionedCartesianMesh, args...) where F
-        for I in cellindicies(mesh) 
-            f(I, mesh, args...)
-        end
+    for I in elemindicies(mesh) 
+        f(I, mesh, args...)
     end
 end
 
@@ -96,9 +95,9 @@ P = CartesianPartition(CartesianIndices(cinds, ranks)
 inds = rankindices(P, mpirank)
 
 mesh = PartionedCartesianMesh(globalMesh, inds)
-for cells in ghostboundary(mesh)
-    other = locate(P, cells)
-    @show other, cells
+for elems in ghostboundary(mesh)
+    other = locate(P, elems)
+    @show other, elems
 end
 ```
 """
