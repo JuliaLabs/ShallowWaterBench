@@ -58,11 +58,16 @@ faces(elem, mesh::CartesianMesh{N}) where {N} = CartesianNeighbors{N}()
 
 struct CartesianNeighbors{N} <: AbstractVector{CartesianIndex{N}} end
 Base.size(::CartesianNeighbors{N}) where {N} = (2N,)
+Base.length(::CartesianNeighbors{N}) where N = 2N
 Base.axes(::CartesianNeighbors{N}) where {N} = (1:2N,)
 Base.getindex(::CartesianNeighbors{N}, i::Int) where {N} = CartesianIndex(ntuple(n -> i ==     n ?  1 :
                                                                                       i == n + N ? -1 :
                                                                                                     0 , N))
-
+Base.iterate(cn::CartesianNeighbors) = (cn[1], 2)
+Base.iterate(cn::CartesianNeighbors, i) = i <= length(cn) ? (cn[i], i+1) : nothing
+Base.IteratorSize(::CartesianNeighbors) = Base.HasShape{1}()	
+Base.eltype(cn::CartesianNeighbors{N}) where N = CartesianIndex{N}
+Base.map(f::F, cn::CartesianNeighbors{N}) where {F,N} = ntuple(i->f(cn[i]), 2N)
 """
     PeriodicCartesianMesh{N} <: CartesianMesh{N}
 
