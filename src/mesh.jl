@@ -1,6 +1,7 @@
 module Meshing
-    export Mesh, CartesianMesh, PeriodicCartesianMesh
+    export Mesh, CartesianMesh, PeriodicCartesianMesh, GhostCartesianMesh, CPU, GPU
     export faces, neighbor, neighbors, overelems, storage
+    export ghostboundary, backend, translate
 
 using Base.Cartesian
 using OffsetArrays
@@ -100,4 +101,91 @@ function storage(::Type{T}, mesh::PeriodicCartesianMesh{N}) where {T, N}
     return OffsetArray(underlaying, inds.indices)
 end
 
+function translate(mesh::PeriodicCartesianMesh{N}, boundary) where N 
+    pI = axes(elemindices(mesh))
+    b = ntuple(N) do i
+        b = boundary.indices[i]
+        length(b) > 1 ? b : mod(b[1], pI[i])
+    end
+    CartesianIndices(b)
+end
+
+abstract type Backend end
+struct CPU <: Backend end
+struct GPU <: Backend end
+
+# TODO: Add backend to PeriodicCartesianMesh
+
+"""
+    GhostCartesianMesh{B, N, M} <: GhostCartesianMesh{N}
+
+Represents the local region of a [`GhostCartesianMesh`](@ref) `M`.
+The local storage is expected to be an `OffsetArray`
+
+The current boundary is of size 1, a future extension would be to make this configurable.
+"""
+struct GhostCartesianMesh{B<:Backend, N} <: CartesianMesh{N}
+    inds :: CartesianIndices{N}
+
+    function GhostCartesianMesh(::B, inds::CartesianIndices{N}) where {B, N}
+        new{B, N}(inds)
+    end
+end
+
+elemindices(mesh::GhostCartesianMesh) = mesh.inds 
+neighbor(elem, face, mesh::GhostCartesianMesh) = elem + face
+
+backend(::GhostCartesianMesh{B}) where B = B()
+
+function overelems(f::F, mesh::GhostCartesianMesh{CPU}, args...) where F
+    for I in elemindices(mesh) 
+        f(I, mesh, args...)
+    end
+end
+
+function storage(::Type{T}, mesh::GhostCartesianMesh{CPU, N}) where {T, N}
+    inds = elemindices(mesh).indices
+    inds = ntuple(N) do i 
+        I = inds[i]
+        (first(I)-1):(last(I)+1)
+    end
+
+    underlaying = Array{Int64}(undef, map(length, inds)...)
+    return OffsetArray(underlaying, inds)
+end
+
+
+"""
+    ghostboundary(mesh::GhostCartesianMesh)
+
+Gives the local indicies that need to be updated
+"""
+function ghostboundary(mesh::GhostCartesianMesh{B, N}) where {B, N}
+    fI = first(elemindices(mesh))
+    lI = last(elemindices(mesh))
+
+    upper = ntuple(Val(N)) do i
+        head, tail = select(fI, lI, i)
+        CartesianIndices((head..., fI[i] - 1, tail...))
+    end
+
+    lower = ntuple(Val(N)) do i
+        head, tail = select(fI, lI, i)
+        CartesianIndices((head..., lI[i] + 1, tail...))
+    end
+
+    return (upper..., lower...)
+end
+
+@inline function select(fI, lI, i)
+    head = ntuple(i-1) do j
+        fI[j]:lI[j]
+    end
+
+    tail = ntuple(length(fI) - i) do j
+        fI[i+j]:lI[i+j]
+    end
+
+    return head, tail
+end
 end # module

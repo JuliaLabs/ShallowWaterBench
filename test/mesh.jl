@@ -1,10 +1,10 @@
 using Test
 
 include(joinpath(@__DIR__, "..", "src", "mesh.jl"))
-include(joinpath(@__DIR__, "..", "src", "partitionedmesh.jl"))
+include(joinpath(@__DIR__, "..", "src", "partitions.jl"))
 
 using .Meshing
-using .PartitionedMeshing
+using .Partitions
 
 dim = 2
 
@@ -14,7 +14,7 @@ globalMesh = PeriodicCartesianMesh(CartesianIndices(globalInds))
 data = storage(Int64, globalMesh)
 
 overelems(globalMesh, data) do elem, mesh, out
-    data[elem] = 1
+    out[elem] = 1
     return
 end
 
@@ -23,14 +23,14 @@ end
 overelems(globalMesh, data) do elem, mesh, out
     Fs = faces(elem, mesh)
     n = neighbor(elem, first(Fs), mesh)
-    data[n] = 2
+    out[n] = 2
     return
 end
 @test all(data .== 2)
 
 # First zero the data
 overelems(globalMesh, data) do elem, mesh, out
-    data[elem] = 0 
+    out[elem] = 0 
     return
 end
 # check that writes end up in the right place
@@ -40,9 +40,9 @@ overelems(globalMesh, data) do elem, mesh, out
     Fs = faces(elem, mesh)
     for (i, f) in enumerate(Fs)
         n = neighbor(elem, f, mesh)
-        data[n] = i
+        out[n] = i
     end
-    data[elem] = -1 
+    out[elem] = -1 
     return
 end
 mask =  [0  0  0  1;
@@ -58,7 +58,7 @@ end
 
 # First zero the data
 overelems(globalMesh, data) do elem, mesh, out
-    data[elem] = 0 
+    out[elem] = 0 
     return
 end
 # check that writes end up in the right place
@@ -85,22 +85,24 @@ end
 nranks = 4
 sz = nranks ÷ dim
 ranks = collect(reshape(0:(nranks-1), ntuple(i->sz, dim)...))
+@test ranks == [0 2;
+                1 3]
 
 myrank = 2
 
 P = CartesianPartition(globalInds, ranks)
 inds = rankindices(P, myrank)
 
-mesh = PartitionedCartesianMesh(CPU(), inds,  globalMesh)
+mesh = GhostCartesianMesh(CPU(), inds)
 boundaries = Vector{Tuple{Int, CartesianIndices{dim}, CartesianIndices{dim}}}()
 for elems in ghostboundary(mesh)
-    other_elems = translate(mesh, elems)
+    other_elems = translate(globalMesh, elems)
     other = locate(P, other_elems)
     @test other !== nothing
     push!(boundaries, (other, elems, other_elems))
 end
 
-data = Dict(rank => storage(Int64, PartitionedCartesianMesh(CPU(), rankindices(P, rank), globalMesh)) for rank in ranks)
+data = Dict(rank => storage(Int64, GhostCartesianMesh(CPU(), rankindices(P, rank))) for rank in ranks)
 localdata = data[myrank]
 
 for (other, elems, other_elems) in boundaries
