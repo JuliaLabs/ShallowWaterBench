@@ -24,7 +24,6 @@ abstract type OrthoBasis{T, N} <: Basis{T, N} end
 for op in (+, -)
     @eval begin
         function Base.$(op)(a::ComboFun{T, N, B}) where {T, N, B <: OrthoBasis}
-            @assert a.basis == b.basis
             ComboFun(a.basis, map($op, a.coeffs))
         end
     end

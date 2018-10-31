@@ -82,7 +82,7 @@ function state(dim, coord)
     elseif dim == 3
       statesyms = (:h, :U, :V, :W)
     end
-    state = NamedTuple{statesyms}(ntuple(j->zero(coord.x), length(statesyms)))
+    state = NamedTuple{statesyms}(ntuple(j->zero(coord.x), Val(dim+1)))
 end
 
 # ### Create storage for state vector and right-hand side

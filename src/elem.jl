@@ -70,20 +70,20 @@ function volumerhs!(h′, V⃗′, h, V⃗, bathymetry, metric, D, ω, elems, gr
     Nq = size(h, 1)
     J = metric.J
     dim=2
-    ξ⃗ = metric.ξ⃗
-    η⃗ = metric.η⃗
+        ξ⃗ = metric.ξ⃗
+        η⃗ = metric.η⃗
     fluxh = Array{DFloat,3}(undef,dim,Nq,Nq)
-    fluxV⃗ = Array{DFloat,3}(undef,dim,Nq,Nq)
+        fluxV⃗ = Array{DFloat,3}(undef,dim,Nq,Nq)
     for e ∈ elems
         hb = bathymetry[e]
         hs = h[e]
         ht = hb + hs
-        v⃗ = V⃗[e] / ht
+               v⃗ = V⃗[e] / ht
         fluxh = V⃗[e]
 
-        fluxV⃗ = ht * v⃗ * 
+               fluxV⃗ = ht * v⃗ * 
 
-        ξ⃗ = dΩ
+               ξ⃗ = dΩ
 
         u=U[:,:,e] ./ H
         v=V[:,:,e] ./ H

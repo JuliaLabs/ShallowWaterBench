@@ -43,12 +43,12 @@ function volumerhs!(rhs, Q::NamedTuple{S, NTuple{2, T}}, bathymetry, metric, D, 
   ξx = metric.ξx
   for e ∈ elems
       #Get primitive variables and fluxes
-      hb=bathymetry[:,e]
-      hs=h[:,e]
-      ht=hs + hb
-      u=U[:,e] ./ ht
-      fluxh=U[:,e]
-      fluxU=(ht .* u .* u + 0.5 .* gravity .* hs .^2) .* δnl + gravity .* hs .* hb
+      hb    = bathymetry[:,e]
+      hs    = h[:,e]
+      ht    = hs + hb
+      u     = U[:,e] ./ ht
+      fluxh = U[:,e]
+      fluxU = (ht .* u .* u + 0.5 .* gravity .* hs .^2) .* δnl + gravity .* hs .* hb
 
       # loop of ξ-grid lines
       rhsh[:,e] += D' * (ω .* J[:,e] .* (ξx[:,e] .* fluxh[:]))
