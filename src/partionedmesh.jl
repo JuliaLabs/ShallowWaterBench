@@ -1,10 +1,10 @@
 module PartionedMeshing
-    using .Meshing
+    using ..Meshing
 
     export PartionedCartesianMesh, CartesianPartition, CPU, GPU
     export ghostboundary, backend, locate, rankindices
 
-    import Meshing: elemindicies
+    import ..Meshing: elemindices, neighbor, overelems
 
 abstract type Backend end
 struct CPU <: Backend end
@@ -16,21 +16,21 @@ struct GPU <: Backend end
 Represents the local region of a [`CartesianMesh`](@ref) `M`.
 The local storage is expected to be an `OffsetArray`
 """
-struct PartionedCartesianMesh{B::Backend, N, M::CartesianMesh{N}} <: CartesianMesh{N}
+struct PartionedCartesianMesh{B<:Backend, N, M<:CartesianMesh{N}} <: CartesianMesh{N}
     inds :: CartesianIndices{N}
     parent :: M
 end
 
-Meshing.neighbor(elem, face, mesh::PartionedCartesianMesh) = elem + face
-Base.parentindicies(mesh::PartionedCartesianMesh) = mesh.inds
+neighbor(elem, face, mesh::PartionedCartesianMesh) = elem + face
+Base.parentindices(mesh::PartionedCartesianMesh) = mesh.inds
 elemindicies(mesh::PartionedCartesianMesh) = CartesianIndices(axes(parentindices(mesh)))
 
 backend(::PartionedCartesianMesh{B}) where B = B()
-function Meshing.overelems(f, mesh::PartionedCartesianMesh, args...)
+function overelems(f, mesh::PartionedCartesianMesh, args...)
     overelems(backend(mesh), f, mesh, args...)
 end
 
-function Meshing.overelems(::CPU, f::F, mesh::PartionedCartesianMesh, args...) where F
+function overelems(::CPU, f::F, mesh::PartionedCartesianMesh, args...) where F
     for I in elemindicies(mesh) 
         f(I, mesh, args...)
     end
@@ -41,7 +41,7 @@ end
 
 Gives the non-local indicies that need to be updated
 """
-function ghostboundary(mesh::PartitionedCartesianMesh{N}) where N
+function ghostboundary(mesh::PartionedCartesianMesh{N}) where N
     # TODO: translate these ranges into the right space we might be periodic
     return ghostboundary(Val(N), first(parentindices(mesh)), last(parentindices(mesh)))
     
@@ -89,7 +89,7 @@ sz = mpisize ÷ dim
 ranks = reshape(0:(mpisize-1), ntuple(i->sz, dim)...)
 
 globalInds = CartesianIndices((1:1024, 1:1024))
-globalMesh = PeriodicCartesianMesh(CartesianIndices(globalInds)
+globalMesh = PeriodicCartesianMesh(CartesianIndices(globalInds))
 
 P = CartesianPartition(CartesianIndices(cinds, ranks)
 inds = rankindices(P, mpirank)
@@ -104,10 +104,10 @@ end
 struct CartesianPartition{N}
     indices    :: CartesianIndices{N}
     ranks      :: Array{Int,N}                     # ranks[i]==r ⇒ rank r has piece i
-    partitions :: Array{CartesianIndices{N}, {N}}  # the indicies of piece i
-    function Partition{N}(inds::CartesianIndices{N}, ranks :: Array{Int,N})
+    partitions :: Array{CartesianIndices{N}, N}  # the indicies of piece i
+    function CartesianPartition{N}(inds::CartesianIndices{N}, ranks :: Array{Int,N}) where N
         partitions = partitions(inds, size(ranks))
-        new(inds, ranks, partitions)
+        new{N}(inds, ranks, partitions)
     end
 end
 
