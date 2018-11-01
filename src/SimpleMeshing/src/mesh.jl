@@ -1,5 +1,5 @@
 module Meshing
-    export Mesh, CartesianMesh, PeriodicCartesianMesh, GhostCartesianMesh, CPU, GPU
+    export Mesh, CartesianMesh, PeriodicCartesianMesh, GhostCartesianMesh, CPU
     export faces, neighbor, neighbors, overelems, storage
     export ghostboundary, backend, translate
 
@@ -8,7 +8,6 @@ using OffsetArrays
 
 abstract type Backend end
 struct CPU <: Backend end
-struct GPU <: Backend end
 
 """
     Mesh{N, B<:Backend}
@@ -99,16 +98,16 @@ Base.mod(x::CartesianIndex{N}, y::CartesianIndices{N}) where {N} = CartesianInde
 neighbor(elem, face, mesh::PeriodicCartesianMesh) =
     (elem + face) in mesh.inds ? elem + face : mod(elem + face, mesh.inds)
 
-function overelems(f::F, mesh::PeriodicCartesianMesh, args...) where F
+function overelems(f::F, mesh::PeriodicCartesianMesh{N, CPU}, args...) where {F, N}
     for I in elemindices(mesh)
         f(I, mesh, args...)
     end
 end
 
-function storage(::Type{T}, mesh::PeriodicCartesianMesh{N}) where {T, N}
+function storage(::Type{T}, mesh::PeriodicCartesianMesh{N, CPU}) where {T, N}
     inds = elemindices(mesh)
-    underlaying = Array{Int64}(undef, map(length, axes(inds))...)
-    return OffsetArray(underlaying, inds.indices)
+    underlying = Array{T}(undef, map(length, axes(inds))...)
+    return OffsetArray(underlying, inds.indices)
 end
 
 function translate(mesh::PeriodicCartesianMesh{N}, boundary) where N 
@@ -119,10 +118,6 @@ function translate(mesh::PeriodicCartesianMesh{N}, boundary) where N
     end
     CartesianIndices(b)
 end
-
-
-
-# TODO: Add backend to PeriodicCartesianMesh
 
 """
     GhostCartesianMesh{B, N, M} <: GhostCartesianMesh{N}
@@ -157,7 +152,7 @@ function storage(::Type{T}, mesh::GhostCartesianMesh{N, CPU}) where {T, N}
         (first(I)-1):(last(I)+1)
     end
 
-    underlaying = Array{Int64}(undef, map(length, inds)...)
+    underlaying = Array{T}(undef, map(length, inds)...)
     return OffsetArray(underlaying, inds)
 end
 
