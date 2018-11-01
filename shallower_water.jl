@@ -30,11 +30,13 @@ X⃗⁻¹    = map(i -> MultilinearFun(I⃗(i), I⃗(i) + 1, -1.0, 1.0), mesh)
 
 # Here is where we construct our basis. In our case, we've chosen an order 3 Lagrange basis over 3 + 1 Lobatto points
 
-ψ = ProductBasis(ntuple(_->LagrangeBasis(LobattoPoints(3)), dim)...)
+ψ = ProductBasis(repeat([LagrangeBasis(LobattoPoints(3))], dim)...)
 
 # Setting some initial conditions
 
-h = map(Y⃗⁻¹ -> ApproxFun(x⃗ -> (y⃗ = Y⃗⁻¹(x⃗); (y⃗+1)*(y⃗-1)'), ψ), X⃗)
+h = map(Y⃗⁻¹ -> ApproxFun((x⃗ -> (y⃗ = Y⃗⁻¹(x⃗); (y⃗+1)'*(y⃗-1))), ψ), X⃗)
+
+# Perform a calculation
 
 h = h .* (h .+ 1) .* h
 

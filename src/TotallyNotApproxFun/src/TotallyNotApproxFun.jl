@@ -2,6 +2,7 @@ module TotallyNotApproxFun
 
 using FastGaussQuadrature
 using StaticArrays
+using Base.Iterators
 
 export Fun, ComboFun, ApproxFun, ProductFun, LagrangeFun, VectorFun, MultilinearFun
 export Basis, OrthoBasis, ProductBasis, LagrangeBasis
@@ -43,16 +44,16 @@ for op in (:(Base.:+), :(Base.:-), :(Base.:*), :(Base.:/))
     @eval begin
         function $op(a::ComboFun{T, N, B}, b::ComboFun{S, N, B}) where {T, S, N, B <: OrthoBasis}
             @assert a.basis == b.basis
-            ComboFun(a.basis, map($op, a.coeffs, b.coeffs))
+            ComboFun(a.basis, $op.(a.coeffs, b.coeffs))
         end
         function $op(a::ComboFun{T, N, B}, b) where {T, N, B <: OrthoBasis}
-            ComboFun(a.basis, map($op, a.coeffs, b))
+            ComboFun(a.basis, $op.(a.coeffs, b))
         end
         function $op(a::ComboFun{T, N, B}, b::Fun) where {T, N, B <: OrthoBasis}
             throw(NotImplementedError())
         end
         function $op(a, b::ComboFun{T, N, B}) where {T, N, B <: OrthoBasis}
-            ComboFun(a.basis, map($op, a.coeffs, b))
+            ComboFun(a.basis, $op.(a.coeffs, b))
         end
         function $op(a::Fun, b::ComboFun{T, N, B}) where {T, N, B <: OrthoBasis}
             throw(NotImplementedError())
@@ -81,11 +82,10 @@ struct ProductBasis{T, N, B <: Tuple{Vararg{OrthoBasis{T, 1}, N}}} <: OrthoBasis
     ProductBasis(bases::OrthoBasis{T, 1}...) where {T} = new{T, length(bases), typeof(bases)}(bases)
 end
 
-
 Base.size(b::ProductBasis) = map(length, b.bases)
 Base.eltype(b::ProductBasis{T, N}) where {T, N} = ProductFun{T, N, Tuple{eltype.(b.bases)...}}
 Base.getindex(b::ProductBasis, i::Int...)::eltype(b) = ProductFun(map(getindex, b.bases, i)...)
-points(b::ProductBasis) = map(i->SVector(getindex.(points.(b.bases), Tuple(i))), CartesianIndices(first.(axes.(points.(b.bases))))) #This is a hard line to read
+points(b::ProductBasis) = SVector.(collect(product(points.(b.bases)...)))
 
 #The minimum-degree polynomial function which is 1 at the nth point and 0 at the other points
 struct LagrangeFun{T, P <: AbstractVector{T}} <: Fun{T, 1}
@@ -120,6 +120,22 @@ Base.size(p::LobattoPoints{T, N}) where {T, N} = (N,)
     return :($(SVector{N, T}(gausslobatto(N)[1]))[i])
 end
 LobattoPoints(n) = LobattoPoints{Float64, n + 1}()
+
+#=
+#A vector-valued array composed of one-dimensional arrays
+struct VectorArray{T, N, A <: Tuple{Vararg{AbstractVector{T}, N}}} <: AbstractArray{SVector{N, T}, N}
+    data::A
+    VectorArray(x::AbstractVector{T, 1}) where {T} = new{T, 1, Tuple{typeof(x)}}((x,))
+    VectorArray(x::AbstractVector{T, 1}...) where {T} = new{T, length(x), typeof(x)}(x)
+end
+
+(f::VectorFun)(x) = apply(f, SVector(x))
+(f::VectorFun)(x::AbstractVector) = apply(f, x)
+(f::VectorFun)(x...) = apply(f, SVector(x...))
+function apply(f::VectorFun, x::AbstractVector)
+    apply.(SVector(f.funs), SVector.(x))
+end
+=#
 
 #A vector-valued function composed of one-dimensional functions
 struct VectorFun{T, N, F <: Tuple{Vararg{Fun{T, 1}, N}}} <: Fun{SVector{N, T}, N}
