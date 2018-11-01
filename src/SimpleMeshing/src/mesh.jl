@@ -53,8 +53,6 @@ overelems(f, mesh::Mesh, args...) = throw(MethodError(overelems, (typeof(f), typ
 elemindices(mesh::Mesh) = throw(MethodError(elemindices, (typeof(Mesh),)))
 storage(::Type{T}, mesh::Mesh) where T = throw(MethodError(storage, (T, typeof(Mesh),)))
 
-Base.map(f, mesh::Mesh{N, CPU}) where N = map(f, elemindices(mesh))
-
 """
     CartesianMesh{N, B} <: Mesh{N, B} 
 
@@ -192,4 +190,14 @@ end
 
     return head, tail
 end
+
+#    Peter's Super Cool Functions
+export elems
+
+#elemindices should really just be called elems
+elems(mesh::Mesh) = elemindices(mesh)
+
+#map over the mesh, returning an appropriate similar array type
+Base.map(f, mesh::Mesh{N, CPU}) where N = map(f, elemindices(mesh))
+
 end # module

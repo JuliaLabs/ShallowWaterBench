@@ -3,6 +3,9 @@ module TotallyNotApproxFun
 using FastGaussQuadrature
 using StaticArrays
 
+export Fun, ComboFun, ApproxFun, ProductFun, LagrangeFun, VectorFun, MultilinearFun
+export Basis, OrthoBasis, ProductBasis, LagrangeBasis
+export points, LobattoPoints
 
 #A representation of a T-valued function in an N-Dimensional space.
 abstract type Fun{T, N} end
@@ -20,7 +23,7 @@ end
 (f::ComboFun)(x::AbstractVector) = apply(f, x)
 (f::ComboFun)(x...)  = apply(f, SVector(x...))
 #f(x) is just sum_i(c_i * b_i(x))
-function apply(f::ComboFun{T}, x::AbstractVector)::T where {T}
+function apply(f::ComboFun, x::AbstractVector)
     return sum(f.coeffs .* (apply.(f.basis, Ref(x))))
 end
 
@@ -62,25 +65,27 @@ end
 #A function which is a product of one-dimensional functions
 struct ProductFun{T, N, F <: Tuple{Vararg{Fun{T, 1}, N}}} <: Fun{T, N}
     funs::F
-    ProductFun(x::Fun{T, 1}) where {T} = new{T, 1, Tuple{typeof(x)}}((x,))
-    ProductFun(x::Fun{T, 1}...) where {T} = new{T, length(x), typeof(x)}(x)
+    ProductFun(funs::Fun{T, 1}) where {T} = new{T, 1, Tuple{typeof(funs)}}((funs,))
+    ProductFun(funs::Fun{T, 1}...) where {T} = new{T, length(funs), typeof(funs)}(funs)
 end
 
 (f::ProductFun)(x) = apply(f, SVector(x))
 (f::ProductFun)(x::AbstractVector) = apply(f, x)
 (f::ProductFun)(x...) = apply(f, SVector(x...))
-function apply(f::ProductFun{T, N}, x::AbstractVector)::T where {T, N}
+function apply(f::ProductFun, x::AbstractVector)
     prod(apply.(SVector(f.funs), SVector.(x)))
 end
 
 #A basis which is a cartesian product of one-dimensional bases
-struct ProductBasis{T, N, F, B <: Tuple{Vararg{OrthoBasis{T, 1, F}, N}}} <: OrthoBasis{T, N, F}
+struct ProductBasis{T, N, F, B <: Tuple{Vararg{OrthoBasis{T, 1}, N}}} <: OrthoBasis{T, N, ProductFun{T, N, Tuple{Vararg{F, N}}}}
     bases::B
+    ProductBasis(basis::OrthoBasis{T, 1, F}) where {T, F} = new{T, 1, F, Tuple{typeof(basis)}}((basis,))
+    ProductBasis(bases::OrthoBasis{T, 1, F}...) where {T, F} = new{T, length(bases), F, typeof(bases)}(bases)
 end
 
 Base.size(b::ProductBasis) = Tuple(map(length, b.bases))
-Base.getindex(b::ProductBasis, i::CartesianIndex) = ProductFun(map(getindex, b.basis, Tuple(i))...)
-points(b::ProductBasis) = map(i -> SVector(getindex.(b.bases, Tuple(i))), CartesianIndices(map(basis->axes(basis)[1], b.basis)...)) #This is a hard line to read
+Base.getindex(b::ProductBasis, i::CartesianIndex) = ProductFun(map(getindex, b.bases, Tuple(i))...)
+points(b::ProductBasis) = map(i -> SVector(getindex.(b.bases, Tuple(i))), CartesianIndices(map(basis->axes(basis)[1], b.bases))) #This is a hard line to read
 
 #The minimum-degree polynomial function which is 1 at the nth point and 0 at the other points
 struct LagrangeFun{T, P <: AbstractVector{T}} <: Fun{T, 1}
@@ -94,7 +99,7 @@ LagrangeFun(points::AbstractVector, n) = LagrangeFun{eltype(points), typeof(poin
 (f::LagrangeFun)(x...) = apply(f, SVector(x...))
 #This method is mostly here for clarity, it probably shouldn't be called (TODO specialize somewhere with a stable interpolation routine)
 apply(f::LagrangeFun, x::AbstractVector) = apply(f, x[1])
-function apply(f::LagrangeFun{T, P}, x)::T where {T, P}
+function apply(f::LagrangeFun, x)
     @assert length(x) == 1
     res = prod(ntuple(i->i == f.n ? 1 : (x - f.points[i])/(f.points[f.n] - f.points[i]), length(f.points)))
 end
@@ -115,6 +120,7 @@ Base.size(p::LobattoPoints{T, N}) where {T, N} = (N,)
 @generated function Base.getindex(p::LobattoPoints{T, N}, i::Int) where {T, N}
     return :($(SVector{N, T}(gausslobatto(N)[1]))[i])
 end
+LobattoPoints(n) = LobattoPoints{Float64, n + 1}()
 
 #A vector-valued function composed of one-dimensional functions
 struct VectorFun{T, N, F <: Tuple{Vararg{Fun{T, 1}, N}}} <: Fun{SVector{N, T}, N}
@@ -126,14 +132,16 @@ end
 (f::VectorFun)(x) = apply(f, SVector(x))
 (f::VectorFun)(x::AbstractVector) = apply(f, x)
 (f::VectorFun)(x...) = apply(f, SVector(x...))
-function apply(f::VectorFun{T, N}, x::AbstractVector)::SVector{N, T} where {T, N}
+function apply(f::VectorFun, x::AbstractVector)
     apply.(SVector(f.funs), SVector.(x))
 end
 
-function RepositionFun(x₀, x₁, y₀, y₁)
-    VectorFun(ComboFun.(LagrangeBasis.(SVector.(x₀, x₁)), SVector.(y₀, y₁))...)
-end
+#WARNING DEFINING AN SARRAY METHOD
+StaticArrays.SVector(i::CartesianIndex) = SVector(Tuple(i))
 
+function MultilinearFun(x₀, x₁, y₀, y₁)
+    VectorFun(ComboFun.(LagrangeBasis.(SVector.(Tuple(x₀), Tuple(x₁))), SVector.(Tuple(y₀), Tuple(y₁)))...)
+end
 
 #r = repositioner(SVector(2.0, 4.0), SVector(3.0, 5.0), SVector(-1.0, -1.0), SVector(1.0, 1.0))
 
