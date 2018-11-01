@@ -77,14 +77,16 @@ function apply(f::ProductFun, x::AbstractVector)
 end
 
 #A basis which is a cartesian product of one-dimensional bases
-struct ProductBasis{T, N, F, B <: Tuple{Vararg{OrthoBasis{T, 1}, N}}} <: OrthoBasis{T, N, ProductFun{T, N, Tuple{Vararg{F, N}}}}
+struct ProductBasis{T, N, B <: Tuple{Vararg{OrthoBasis{T, 1}, N}}} <: OrthoBasis{T, N, Fun{T, N}}
     bases::B
-    ProductBasis(basis::OrthoBasis{T, 1, F}) where {T, F} = new{T, 1, F, Tuple{typeof(basis)}}((basis,))
-    ProductBasis(bases::OrthoBasis{T, 1, F}...) where {T, F} = new{T, length(bases), F, typeof(bases)}(bases)
+    ProductBasis(basis::OrthoBasis{T, 1}) where {T} = new{T, 1, Tuple{typeof(basis)}}((basis,))
+    ProductBasis(bases::OrthoBasis{T, 1}...) where {T} = new{T, length(bases), typeof(bases)}(bases)
 end
 
+
 Base.size(b::ProductBasis) = Tuple(map(length, b.bases))
-Base.getindex(b::ProductBasis, i::CartesianIndex) = ProductFun(map(getindex, b.bases, Tuple(i))...)
+Base.eltype(b::ProductBasis) = ProductFun{T, N, Tuple{eltype.(b.bases)...}}
+Base.getindex(b::ProductBasis, i::CartesianIndex)::eltype(b) = ProductFun(map(getindex, b.bases, Tuple(i))...)
 points(b::ProductBasis) = map(i -> SVector(getindex.(b.bases, Tuple(i))), CartesianIndices(map(basis->axes(basis)[1], b.bases))) #This is a hard line to read
 
 #The minimum-degree polynomial function which is 1 at the nth point and 0 at the other points
@@ -133,7 +135,8 @@ end
 (f::VectorFun)(x::AbstractVector) = apply(f, x)
 (f::VectorFun)(x...) = apply(f, SVector(x...))
 function apply(f::VectorFun, x::AbstractVector)
-    apply.(SVector(f.funs), SVector.(x))
+    println(x)
+    apply.(SVector(f.funs), x)
 end
 
 #WARNING DEFINING AN SARRAY METHOD
