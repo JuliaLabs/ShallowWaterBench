@@ -32,7 +32,7 @@ abstract type OrthoBasis{T, N, F} <: Basis{T, N, F} end
 points(::OrthoBasis) = error("Subtypes of OrthoBasis must define the points function")
 ApproxFun(f, b::OrthoBasis) = ComboFun(b, map(f, points(b)))
 
-for op in (:+, :-)
+for op in (:+, :-, :transpose)
     @eval begin
         function Base.$(op)(a::ComboFun{T, N, B}) where {T, N, B <: OrthoBasis}
             ComboFun(a.basis, map($op, a.coeffs))
@@ -46,14 +46,12 @@ for op in (:(Base.:+), :(Base.:-), :(Base.:*), :(Base.:/))
             ComboFun(a.basis, map($op, a.coeffs, b.coeffs))
         end
         function $op(a::ComboFun{T, N, B}, b) where {T, N, B <: OrthoBasis}
-            @assert a.basis == b.basis
             ComboFun(a.basis, map($op, a.coeffs, b))
         end
         function $op(a::ComboFun{T, N, B}, b::Fun) where {T, N, B <: OrthoBasis}
             throw(NotImplementedError())
         end
         function $op(a, b::ComboFun{T, N, B}) where {T, N, B <: OrthoBasis}
-            @assert a.basis == b.basis
             ComboFun(a.basis, map($op, a.coeffs, b))
         end
         function $op(a::Fun, b::ComboFun{T, N, B}) where {T, N, B <: OrthoBasis}
@@ -84,10 +82,10 @@ struct ProductBasis{T, N, B <: Tuple{Vararg{OrthoBasis{T, 1}, N}}} <: OrthoBasis
 end
 
 
-Base.size(b::ProductBasis) = Tuple(map(length, b.bases))
-Base.eltype(b::ProductBasis) = ProductFun{T, N, Tuple{eltype.(b.bases)...}}
-Base.getindex(b::ProductBasis, i::CartesianIndex)::eltype(b) = ProductFun(map(getindex, b.bases, Tuple(i))...)
-points(b::ProductBasis) = map(i -> SVector(getindex.(b.bases, Tuple(i))), CartesianIndices(map(basis->axes(basis)[1], b.bases))) #This is a hard line to read
+Base.size(b::ProductBasis) = map(length, b.bases)
+Base.eltype(b::ProductBasis{T, N}) where {T, N} = ProductFun{T, N, Tuple{eltype.(b.bases)...}}
+Base.getindex(b::ProductBasis, i::Int...)::eltype(b) = ProductFun(map(getindex, b.bases, i)...)
+points(b::ProductBasis) = map(i->SVector(getindex.(points.(b.bases), Tuple(i))), CartesianIndices(first.(axes.(points.(b.bases))))) #This is a hard line to read
 
 #The minimum-degree polynomial function which is 1 at the nth point and 0 at the other points
 struct LagrangeFun{T, P <: AbstractVector{T}} <: Fun{T, 1}
@@ -100,10 +98,9 @@ LagrangeFun(points::AbstractVector, n) = LagrangeFun{eltype(points), typeof(poin
 (f::LagrangeFun)(x::AbstractVector) = apply(f, x)
 (f::LagrangeFun)(x...) = apply(f, SVector(x...))
 #This method is mostly here for clarity, it probably shouldn't be called (TODO specialize somewhere with a stable interpolation routine)
-apply(f::LagrangeFun, x::AbstractVector) = apply(f, x[1])
-function apply(f::LagrangeFun, x)
+function apply(f::LagrangeFun, x::AbstractVector)
     @assert length(x) == 1
-    res = prod(ntuple(i->i == f.n ? 1 : (x - f.points[i])/(f.points[f.n] - f.points[i]), length(f.points)))
+    res = prod(ntuple(i->i == f.n ? 1 : (x[1] - f.points[i])/(f.points[f.n] - f.points[i]), length(f.points)))
 end
 
 #A basis of polynomials
@@ -135,15 +132,15 @@ end
 (f::VectorFun)(x::AbstractVector) = apply(f, x)
 (f::VectorFun)(x...) = apply(f, SVector(x...))
 function apply(f::VectorFun, x::AbstractVector)
-    println(x)
-    apply.(SVector(f.funs), x)
+    apply.(SVector(f.funs), SVector.(x))
 end
 
 #WARNING DEFINING AN SARRAY METHOD
 StaticArrays.SVector(i::CartesianIndex) = SVector(Tuple(i))
 
 function MultilinearFun(x₀, x₁, y₀, y₁)
-    VectorFun(ComboFun.(LagrangeBasis.(SVector.(Tuple(x₀), Tuple(x₁))), SVector.(Tuple(y₀), Tuple(y₁)))...)
+    x₀, x₁, y₀, y₁ = map(Tuple, (x₀, x₁, y₀, y₁))
+    VectorFun(ComboFun.(LagrangeBasis.(SVector.(x₀, x₁)), SVector.(y₀, y₁))...)
 end
 
 #r = repositioner(SVector(2.0, 4.0), SVector(3.0, 5.0), SVector(-1.0, -1.0), SVector(1.0, 1.0))
