@@ -1,8 +1,6 @@
 using Test
 
-include(joinpath(@__DIR__, "..", "src", "mesh.jl"))
-include(joinpath(@__DIR__, "..", "src", "partitions.jl"))
-
+using SimpleMeshing
 using .Meshing
 using .Partitions
 
