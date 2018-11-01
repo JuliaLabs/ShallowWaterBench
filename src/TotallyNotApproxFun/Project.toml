@@ -1,0 +1,7 @@
+name = "TotallyNotApproxFun"
+uuid = "ac408ca2-de02-11e8-2e84-c5797921eb19"
+authors = ["Peter Ahrens <ptrahrens@gmail.com>"]
+
+[deps]
+FastGaussQuadrature = "442a2c76-b920-505d-bb47-c5924d526838"
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"

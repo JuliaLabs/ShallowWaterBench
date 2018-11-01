@@ -1,6 +1,7 @@
 using SimpleMeshing
 using .Meshing
 using .Partitions
+using TotallyNotApproxFun
 
 dim = 2
 
