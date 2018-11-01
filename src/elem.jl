@@ -1,5 +1,14 @@
 
 
+
+
+∇X⃗ = map(∇, X⃗)
+∇X⃗ = FillArray(∇(X⃗[1]), inds)
+
+SVector(Tuple(i)), eachindex(mesh))
+global_x⃗ = map(i -> SVector(Tuple(i)))/size(mesh)
+
+
 #return a linear function which maps x₀ to y₀ and x₁ to y₁
 function repositioner(x₀, x₁, y₀, y₁)
     ProductFun(ComboFun.(LagrangeBasis.(SVector.(x₀, x₁)), SVector.(y₀, y₁))...)

@@ -23,6 +23,8 @@ end
 
 #A basis corresponding to a set of points, where the basis function i is one(T) at point i and zero(T) everywhere else
 abstract type OrthoBasis{T, N, F} <: Basis{T, N, F} end
+points(::OrthoBasis) = error("Subtypes of OrthoBasis must define the points function")
+ApproxFun(f, b::OrthoBasis) = ComboFun(b, map(f, points(b)))
 
 for op in (:+, :-)
     @eval begin
@@ -75,6 +77,7 @@ end
 
 Base.size(b::ProductBasis) = Tuple(map(length, b.bases))
 Base.getindex(b::ProductBasis, i::CartesianIndex) = ProductFun(map(getindex, b.basis, Tuple(i))...)
+points(b::ProductBasis) = map(i -> SVector(getindex.(b.bases, Tuple(i))), CartesianIndices(map(basis->axes(basis)[1], b.basis)...)) #This is a hard line to read
 
 #The minimum-degree polynomial function which is 1 at the nth point and 0 at the other points
 struct LagrangeFun{T, P <: AbstractVector{T}} <: Fun{T, 1}
@@ -100,6 +103,7 @@ end
 
 Base.size(b::LagrangeBasis) = size(b.points)
 Base.getindex(b::LagrangeBasis, i::Int) = LagrangeFun(b.points, i)
+points(b::LagrangeBasis) = b.points
 
 #A vector representing Lobatto Points
 struct LobattoPoints{T, N} <: AbstractVector{T} end
@@ -123,24 +127,16 @@ function apply(f::VectorFun{T, N}, x::AbstractVector)::SVector{N, T} where {T, N
     apply.(SVector(f.funs), SVector.(x))
 end
 
-
-
-
-
-
-
-
-
-
-
-function repositioner(x₀, x₁, y₀, y₁)
+function RepositionFun(x₀, x₁, y₀, y₁)
     VectorFun(ComboFun.(LagrangeBasis.(SVector.(x₀, x₁)), SVector.(y₀, y₁))...)
 end
-r = repositioner(SVector(2.0, 4.0), SVector(3.0, 5.0), SVector(-1.0, -1.0), SVector(1.0, 1.0))
 
-println(r([3.4, 4.5]))
-using InteractiveUtils
-@code_warntype(r([3.4, 4.5]))
+
+#r = repositioner(SVector(2.0, 4.0), SVector(3.0, 5.0), SVector(-1.0, -1.0), SVector(1.0, 1.0))
+
+#println(r([3.4, 4.5]))
+#using InteractiveUtils
+#@code_warntype(r([3.4, 4.5]))
 
 
 
