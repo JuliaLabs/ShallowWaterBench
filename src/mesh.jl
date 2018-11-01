@@ -1,11 +1,17 @@
 module Meshing
-    export Mesh, CartesianMesh, PeriodicCartesianMesh
-    export faces, neighbor, neighbors, overelems
+    export Mesh, CartesianMesh, PeriodicCartesianMesh, GhostCartesianMesh, CPU, GPU
+    export faces, neighbor, neighbors, overelems, storage
+    export ghostboundary, backend, translate
 
 using Base.Cartesian
+using OffsetArrays
+
+abstract type Backend end
+struct CPU <: Backend end
+struct GPU <: Backend end
 
 """
-    Mesh{N}
+    Mesh{N, B<:Backend}
 
 `Mesh` is a arbitrary and potentially unstructured mesh, consisting of many elems.
 The mesh encodes the connectivity between different elems.
@@ -21,7 +27,9 @@ The mesh encodes the connectivity between different elems.
   - This entails that in an adaptive mesh, even though elements might be rectangular and have four sides
     the sides are split into multiple faces.
 """
-abstract type Mesh{N} end
+abstract type Mesh{N, B<:Backend} end
+
+backend(::Mesh{N, B}) where {N, B} = B()
 
 """
     faces(elem, mesh::Mesh)
@@ -44,33 +52,44 @@ neighbors(elem, mesh::Mesh) = map(face -> neighbor(elem, face, mesh), faces(elem
 overelems(f, mesh::Mesh, args...) = throw(MethodError(overelems, (typeof(f), typeof(mesh), typeof(args))))
 
 elemindices(mesh::Mesh) = throw(MethodError(elemindices, (typeof(Mesh),)))
+storage(::Type{T}, mesh::Mesh) where T = throw(MethodError(storage, (T, typeof(Mesh),)))
 
 """
-    CartesianMesh{N} <: Mesh{N} 
+    CartesianMesh{N, B} <: Mesh{N, B} 
 
 A `CartesianMesh` is a [`Mesh`](@ref) over a cartesian space.
 The faces of a elem in a `CartesianMesh` are [`CartesianNeighbors`](@ref), 
 and the elem indicies are [`CartesianIndex`](@ref).
 """
-abstract type CartesianMesh{N} <: Mesh{N} end
+abstract type CartesianMesh{N, B} <: Mesh{N, B} end
 
 faces(elem, mesh::CartesianMesh{N}) where {N} = CartesianNeighbors{N}()
 
 struct CartesianNeighbors{N} <: AbstractVector{CartesianIndex{N}} end
 Base.size(::CartesianNeighbors{N}) where {N} = (2N,)
+Base.length(::CartesianNeighbors{N}) where N = 2N
 Base.axes(::CartesianNeighbors{N}) where {N} = (1:2N,)
 Base.getindex(::CartesianNeighbors{N}, i::Int) where {N} = CartesianIndex(ntuple(n -> i ==     n ?  1 :
                                                                                       i == n + N ? -1 :
                                                                                                     0 , N))
+Base.iterate(cn::CartesianNeighbors) = (cn[1], 2)
+Base.iterate(cn::CartesianNeighbors, i) = i <= length(cn) ? (cn[i], i+1) : nothing
+Base.IteratorSize(::CartesianNeighbors) = Base.HasShape{1}()	
+Base.eltype(cn::CartesianNeighbors{N}) where N = CartesianIndex{N}
+Base.map(f::F, cn::CartesianNeighbors{N}) where {F,N} = ntuple(i->f(cn[i]), 2N)
 
 """
-    PeriodicCartesianMesh{N} <: CartesianMesh{N}
+    PeriodicCartesianMesh{N, B} <: CartesianMesh{N, B}
 
 A `PeriodicCartesianMesh{N}` is a [`CartesianMesh`](@ref) with a periodic boundary condition.
 """
-struct PeriodicCartesianMesh{N} <: CartesianMesh{N}
+struct PeriodicCartesianMesh{N, B} <: CartesianMesh{N, B}
     inds::CartesianIndices{N}
+    function PeriodicCartesianMesh(::B, inds::CartesianIndices{N}) where {B, N}
+        new{N, B}(inds)
+    end
 end
+PeriodicCartesianMesh(inds::CartesianIndices) = PeriodicCartesianMesh(CPU(), inds)
 
 elemindices(mesh::PeriodicCartesianMesh) = mesh.inds
 
@@ -86,4 +105,94 @@ function overelems(f::F, mesh::PeriodicCartesianMesh, args...) where F
     end
 end
 
+function storage(::Type{T}, mesh::PeriodicCartesianMesh{N}) where {T, N}
+    inds = elemindices(mesh)
+    underlaying = Array{Int64}(undef, map(length, axes(inds))...)
+    return OffsetArray(underlaying, inds.indices)
+end
+
+function translate(mesh::PeriodicCartesianMesh{N}, boundary) where N 
+    pI = axes(elemindices(mesh))
+    b = ntuple(N) do i
+        b = boundary.indices[i]
+        length(b) > 1 ? b : mod(b[1], pI[i])
+    end
+    CartesianIndices(b)
+end
+
+
+
+# TODO: Add backend to PeriodicCartesianMesh
+
+"""
+    GhostCartesianMesh{B, N, M} <: GhostCartesianMesh{N}
+
+Represents the local region of a [`GhostCartesianMesh`](@ref) `M`.
+The local storage is expected to be an `OffsetArray`
+
+The current boundary is of size 1, a future extension would be to make this configurable.
+"""
+struct GhostCartesianMesh{N, B} <: CartesianMesh{N, B}
+    inds :: CartesianIndices{N}
+
+    function GhostCartesianMesh(::B, inds::CartesianIndices{N}) where {N,B}
+        new{N, B}(inds)
+    end
+end
+GhostCartesianMesh(inds::CartesianIndices) = GhostCartesianMesh(CPU(), inds)
+
+elemindices(mesh::GhostCartesianMesh) = mesh.inds 
+neighbor(elem, face, mesh::GhostCartesianMesh) = elem + face
+
+function overelems(f::F, mesh::GhostCartesianMesh{N, CPU}, args...) where {F, N}
+    for I in elemindices(mesh) 
+        f(I, mesh, args...)
+    end
+end
+
+function storage(::Type{T}, mesh::GhostCartesianMesh{N, CPU}) where {T, N}
+    inds = elemindices(mesh).indices
+    inds = ntuple(N) do i 
+        I = inds[i]
+        (first(I)-1):(last(I)+1)
+    end
+
+    underlaying = Array{Int64}(undef, map(length, inds)...)
+    return OffsetArray(underlaying, inds)
+end
+
+
+"""
+    ghostboundary(mesh::GhostCartesianMesh)
+
+Gives the local indicies that need to be updated
+"""
+function ghostboundary(mesh::GhostCartesianMesh{N}) where N
+    fI = first(elemindices(mesh))
+    lI = last(elemindices(mesh))
+
+    upper = ntuple(Val(N)) do i
+        head, tail = select(fI, lI, i)
+        CartesianIndices((head..., fI[i] - 1, tail...))
+    end
+
+    lower = ntuple(Val(N)) do i
+        head, tail = select(fI, lI, i)
+        CartesianIndices((head..., lI[i] + 1, tail...))
+    end
+
+    return (upper..., lower...)
+end
+
+@inline function select(fI, lI, i)
+    head = ntuple(i-1) do j
+        fI[j]:lI[j]
+    end
+
+    tail = ntuple(length(fI) - i) do j
+        fI[i+j]:lI[i+j]
+    end
+
+    return head, tail
+end
 end # module
