@@ -40,6 +40,9 @@ h = map(Y⃗⁻¹ -> ApproxFun((x⃗ -> (y⃗ = Y⃗⁻¹(x⃗); (y⃗+1)'*(y⃗
 
 h = h .* (h .+ 1) .* h
 
+println(h[1:3])
+println(h[1])
+
 #plot h now
 
 #we can get the value of h at some position x⃗ by calling h[I⃗⁻¹(x⃗)](X⃗⁻¹(x⃗))

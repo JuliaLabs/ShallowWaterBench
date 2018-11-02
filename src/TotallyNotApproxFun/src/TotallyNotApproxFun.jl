@@ -11,6 +11,22 @@ export points, LobattoPoints
 #A representation of a T-valued function in an N-Dimensional space.
 abstract type Fun{T, N} end
 
+summary(io, fn::Fun{T}) where {T} = show(IOContext(io, :typeinfo=>T), "$(nameof(f))()≈$(value(fn))")
+
+function Base.show(io::IO, f::Fun{T}) where {T}
+    if (get(io, :typeinfo, Any) <: typeof(f))
+        print(io, "ƒ()≈")
+    elseif get(io, :compact, false)
+        print(io, "$(nameof(f))()::$T≈")
+    else
+        print(io, "$(typeof(f))()≈")
+    end
+    show(IOContext(io, :typeinfo=>T), value(f))
+end
+
+#We'll work on this.
+value(f) = f(0)
+
 #A discretization of a (T-valued function)-valued function in an N-Dimensional space.
 abstract type Basis{T, N, F<:Fun{T, N}} <: AbstractArray{F, N} end
 
@@ -20,9 +36,7 @@ struct ComboFun{T, N, B<:Basis{<:Any, N}, C<:AbstractArray{T}} <: Fun{T, N}
     coeffs::C
 end
 
-(f::ComboFun)(x) = apply(f, SVector(x))
-(f::ComboFun)(x::AbstractVector) = apply(f, x)
-(f::ComboFun)(x...)  = apply(f, SVector(x...))
+(f::ComboFun)(x...) = apply(f, SVector(x...))
 #f(x) is just sum_i(c_i * b_i(x))
 function apply(f::ComboFun, x::AbstractVector)
     return sum(f.coeffs .* (apply.(f.basis, Ref(x))))
@@ -68,8 +82,6 @@ struct ProductFun{T, N, F <: Tuple{Vararg{Fun{T, 1}, N}}} <: Fun{T, N}
     ProductFun(funs::Fun{T, 1}...) where {T} = new{T, length(funs), typeof(funs)}(funs)
 end
 
-(f::ProductFun)(x) = apply(f, SVector(x))
-(f::ProductFun)(x::AbstractVector) = apply(f, x)
 (f::ProductFun)(x...) = apply(f, SVector(x...))
 function apply(f::ProductFun, x::AbstractVector)
     prod(apply.(SVector(f.funs), SVector.(x)))
@@ -85,7 +97,7 @@ end
 Base.size(b::ProductBasis) = map(length, b.bases)
 Base.eltype(b::ProductBasis{T, N}) where {T, N} = ProductFun{T, N, Tuple{eltype.(b.bases)...}}
 Base.getindex(b::ProductBasis, i::Int...)::eltype(b) = ProductFun(map(getindex, b.bases, i)...)
-points(b::ProductBasis) = SVector.(collect(product(points.(b.bases)...)))
+points(b::ProductBasis) = SArray{Tuple{length.(points.(b.bases))...}}(SVector.(product(points.(b.bases)...))) #TODO specialize `product` for static sizes instead of this function
 
 #The minimum-degree polynomial function which is 1 at the nth point and 0 at the other points
 struct LagrangeFun{T, P <: AbstractVector{T}} <: Fun{T, 1}
@@ -94,8 +106,6 @@ struct LagrangeFun{T, P <: AbstractVector{T}} <: Fun{T, 1}
 end
 
 LagrangeFun(points::AbstractVector, n) = LagrangeFun{eltype(points), typeof(points)}(points, n)
-(f::LagrangeFun)(x) = apply(f, SVector(x))
-(f::LagrangeFun)(x::AbstractVector) = apply(f, x)
 (f::LagrangeFun)(x...) = apply(f, SVector(x...))
 #This method is mostly here for clarity, it probably shouldn't be called (TODO specialize somewhere with a stable interpolation routine)
 function apply(f::LagrangeFun, x::AbstractVector)
@@ -144,8 +154,6 @@ struct VectorFun{T, N, F <: Tuple{Vararg{Fun{T, 1}, N}}} <: Fun{SVector{N, T}, N
     VectorFun(x::Fun{T, 1}...) where {T} = new{T, length(x), typeof(x)}(x)
 end
 
-(f::VectorFun)(x) = apply(f, SVector(x))
-(f::VectorFun)(x::AbstractVector) = apply(f, x)
 (f::VectorFun)(x...) = apply(f, SVector(x...))
 function apply(f::VectorFun, x::AbstractVector)
     apply.(SVector(f.funs), SVector.(x))
