@@ -1,7 +1,7 @@
 module Meshing
     export Mesh, CartesianMesh, PeriodicCartesianMesh, GhostCartesianMesh, CPU
     export faces, neighbor, neighbors, overelems, storage, elems
-    export ghostboundary, backend, translate
+    export ghostboundaries, boundaries, backend, translate
 
 using Base.Cartesian
 using OffsetArrays
@@ -16,10 +16,13 @@ struct CPU <: Backend end
 The mesh encodes the connectivity between different elems.
 
 ## Interface
+- [`elems`](@ref) obtain the iterator over the elements.
 - [`overelems`](@ref) apply a function over all elements of the mesh.
 - [`neighbors`](@ref) query all neighbors of a given elem in the mesh.
 - [`faces`](@ref) query all faces of a given elem in the mesh.
 - [`neighbor`](@ref) given a elem and a face, query the neighboring elem in the mesh.
+- [`storage`](@ref) allocate a storage that is compatible with a mesh, and can be indexed by [`elems`](@ref).
+- [`backend`](@ref) query which backend is used by the mesh.
 
 ## Terminology
 - A face is intersection between two elements.
@@ -28,6 +31,9 @@ The mesh encodes the connectivity between different elems.
 """
 abstract type Mesh{N, B<:Backend} end
 
+"""
+    backend(Mesh)
+"""
 backend(::Mesh{N, B}) where {N, B} = B()
 
 """
@@ -50,7 +56,14 @@ neighbors(elem, mesh::Mesh) = map(face -> neighbor(elem, face, mesh), faces(elem
 """
 overelems(f, mesh::Mesh, args...) = throw(MethodError(overelems, (typeof(f), typeof(mesh), typeof(args))))
 
+"""
+    elems(mesh)
+"""
 elems(mesh::Mesh) = throw(MethodError(elems, (typeof(Mesh),)))
+
+"""
+    storage(T, mesh)
+"""
 storage(::Type{T}, mesh::Mesh) where T = throw(MethodError(storage, (T, typeof(Mesh),)))
 
 function Base.map(f::F, mesh::Mesh) where F
@@ -140,7 +153,8 @@ end
 Represents the local region of a [`GhostCartesianMesh`](@ref) `M`.
 The local storage is expected to be an `OffsetArray`
 
-The current boundary is of size 1, a future extension would be to make this configurable.
+The current ghost-boundary is of size 1, a future extension would be to make this configurable.
+Use [`ghostboundaries`](@ref) to query it.
 """
 struct GhostCartesianMesh{N, B} <: CartesianMesh{N, B}
     inds :: CartesianIndices{N}
@@ -173,13 +187,35 @@ function storage(::Type{T}, mesh::GhostCartesianMesh{N, CPU}) where {T, N}
     return OffsetArray(underlaying, inds)
 end
 
+# TODO: refactor boundaries and ghostboundaries
+"""
+    boundaries(mesh::CartesianMesh)
+
+Gives the boundaries of the cartesian region.
+"""
+function boundaries(mesh::CartesianMesh{N}) where N
+    fI = first(elems(mesh))
+    lI = last(elems(mesh))
+
+    upper = ntuple(Val(N)) do i
+        head, tail = select(fI, lI, i)
+        CartesianIndices((head..., fI[i], tail...))
+    end
+
+    lower = ntuple(Val(N)) do i
+        head, tail = select(fI, lI, i)
+        CartesianIndices((head..., lI[i], tail...))
+    end
+
+    return (upper..., lower...)
+end
 
 """
-    ghostboundary(mesh::GhostCartesianMesh)
+    ghostboundaries(mesh::GhostCartesianMesh)
 
-Gives the local indicies that need to be updated
+Gives the boundaries of the cartesian region.
 """
-function ghostboundary(mesh::GhostCartesianMesh{N}) where N
+function ghostboundaries(mesh::GhostCartesianMesh{N}) where N
     fI = first(elems(mesh))
     lI = last(elems(mesh))
 
