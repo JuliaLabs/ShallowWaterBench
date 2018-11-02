@@ -9,6 +9,8 @@ dim = 2
 globalInds = CartesianIndices(ntuple(i-> 1:1024, dim))
 globalMesh = PeriodicCartesianMesh(CartesianIndices(globalInds))
 
+@test all(map(identity, globalMesh) .== elems(globalMesh))
+
 data = storage(Int64, globalMesh)
 
 overelems(globalMesh, data) do elem, mesh, out
@@ -28,7 +30,7 @@ end
 
 # First zero the data
 overelems(globalMesh, data) do elem, mesh, out
-    out[elem] = 0 
+    out[elem] = 0
     return
 end
 # check that writes end up in the right place
@@ -40,7 +42,7 @@ overelems(globalMesh, data) do elem, mesh, out
         n = neighbor(elem, f, mesh)
         out[n] = i
     end
-    out[elem] = -1 
+    out[elem] = -1
     return
 end
 mask =  [0  0  0  1;
@@ -56,7 +58,7 @@ end
 
 # First zero the data
 overelems(globalMesh, data) do elem, mesh, out
-    out[elem] = 0 
+    out[elem] = 0
     return
 end
 # check that writes end up in the right place
@@ -66,7 +68,7 @@ overelems(globalMesh, data) do elem, mesh, out
     for (i, n) in enumerate(neighbors(elem, mesh))
         data[n] = i
     end
-    data[elem] = -1 
+    data[elem] = -1
     return
 end
 mask =  [0  0  0  1;
@@ -92,18 +94,18 @@ P = CartesianPartition(globalInds, ranks)
 inds = rankindices(P, myrank)
 
 mesh = GhostCartesianMesh(CPU(), inds)
-boundaries = Vector{Tuple{Int, CartesianIndices{dim}, CartesianIndices{dim}}}()
-for elems in ghostboundary(mesh)
-    other_elems = translate(globalMesh, elems)
+ghostcells = Vector{Tuple{Int, CartesianIndices{dim}, CartesianIndices{dim}, CartesianIndices{dim}}}()
+for (ghostelems, elems) in zip(ghostboundaries(mesh), boundaries(mesh))
+    other_elems = translate(globalMesh, ghostelems)
     other = locate(P, other_elems)
     @test other !== nothing
-    push!(boundaries, (other, elems, other_elems))
+    push!(ghostcells, (other, ghostelems, other_elems, elems))
 end
 
 data = Dict(rank => storage(Int64, GhostCartesianMesh(CPU(), rankindices(P, rank))) for rank in ranks)
 localdata = data[myrank]
 
-for (other, elems, other_elems) in boundaries
-    localdata[elems] = view(data[other], other_elems)
-    # XXX: localdata[elems] .= view(data[other], other_elems)
+for (other, ghostelems, other_elems, elems) in ghostcells
+    localdata[ghostelems] = view(data[other], other_elems)
+    # XXX: localdata[ghostelems] .= view(data[other], other_elems)
 end
