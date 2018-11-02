@@ -73,7 +73,7 @@ function Base.map(f::F, mesh::Mesh) where F
         T = typeof(f(I))
     end
     out = storage(T, mesh)
-    overelems(mesh, f, out) do I, mesh, f, out
+    overelems(mesh, f, out) do I, mesh, f::Function, out
         out[I] = f(I)
     end
     return out
@@ -108,10 +108,10 @@ Base.map(f::F, cn::CartesianNeighbors{N}) where {F,N} = ntuple(i->f(cn[i]), 2N)
 
 A `PeriodicCartesianMesh{N}` is a [`CartesianMesh`](@ref) with a periodic boundary condition.
 """
-struct PeriodicCartesianMesh{N, B} <: CartesianMesh{N, B}
-    inds::CartesianIndices{N}
+struct PeriodicCartesianMesh{N, B, I<:CartesianIndices{N}} <: CartesianMesh{N, B}
+    inds::I
     function PeriodicCartesianMesh(::B, inds::CartesianIndices{N}) where {B, N}
-        new{N, B}(inds)
+        new{N, B, typeof(inds)}(inds)
     end
 end
 PeriodicCartesianMesh(inds::CartesianIndices; backend = CPU()) = PeriodicCartesianMesh(backend, inds)
