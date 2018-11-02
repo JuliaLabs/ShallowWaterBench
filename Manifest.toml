@@ -165,7 +165,7 @@ deps = ["Distributed", "InteractiveUtils", "Logging", "Random"]
 uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [[TotallyNotApproxFun]]
-deps = ["FastGaussQuadrature", "StaticArrays"]
+deps = ["FastGaussQuadrature", "LinearAlgebra", "StaticArrays"]
 path = "src/TotallyNotApproxFun"
 uuid = "ac408ca2-de02-11e8-2e84-c5797921eb19"
 version = "0.0.0"

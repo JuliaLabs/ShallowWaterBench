@@ -4,6 +4,7 @@ using .Partitions
 using TotallyNotApproxFun
 using StaticArrays
 using Base.Iterators
+using LinearAlgebra
 
 const dim = 2
 const order = 3
@@ -41,16 +42,29 @@ X⃗⁻¹    = map(i -> MultilinearFun(I⃗(i), I⃗(i) + 1, -1.0, 1.0), mesh)
 
 ψ = ProductBasis(repeat([LagrangeBasis(LobattoPoints(order))], dim)...)
 
-# Setting some initial conditions
+# Set initial conditions
 
-h = map(Y⃗⁻¹ -> ApproxFun((x⃗ -> (y⃗ = Y⃗⁻¹(x⃗); (y⃗+1)'*(y⃗-1))), ψ), X⃗)
+ψX⃗ = ApproxFun.(X⃗, Ref(ψ))
 
-# Perform a calculation
+r = norm.(ψX⃗ .- 0.5)
+bathymetry = zero.(r).+0.2
+h = 0.5 .* exp.(-100.0 .* r)
+U⃗ = zero.(ψX⃗)
 
-h = h .* (h .+ 1) .* h
+using InteractiveUtils
+@code_warntype(I((1, 1)))
 
-println(h[1:3])
-println(h[1])
+#rhsh = zero.(Qh)
+#rhsU⃗ = zero.(QU⃗)
+#if (advection)
+#    δnl=1.0
+#    gravity=0.0
+#    if dim == 1
+#        QU⃗ = Qh .+ bathymetry
+#    elseif dim == 2
+#        QU⃗ = Qh .+ (bathymetry.*Ref([1.0, 0.0]))
+#    end
+#end
 
 #plot h now
 

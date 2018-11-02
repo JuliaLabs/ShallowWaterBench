@@ -3,6 +3,7 @@ module TotallyNotApproxFun
 using FastGaussQuadrature
 using StaticArrays
 using Base.Iterators
+using LinearAlgebra
 
 export Fun, ComboFun, ApproxFun, ProductFun, LagrangeFun, VectorFun, MultilinearFun
 export Basis, OrthoBasis, ProductBasis, LagrangeBasis
@@ -47,14 +48,14 @@ abstract type OrthoBasis{T, N, F} <: Basis{T, N, F} end
 points(::OrthoBasis) = error("Subtypes of OrthoBasis must define the points function")
 ApproxFun(f, b::OrthoBasis) = ComboFun(b, map(f, points(b)))
 
-for op in (:+, :-, :transpose)
+for op in (:(Base.:+), :(Base.:-), :(Base.zero), :(LinearAlgebra.transpose), :(LinearAlgebra.norm), :(Base.:exp))
     @eval begin
-        function Base.$(op)(a::ComboFun{T, N, B}) where {T, N, B <: OrthoBasis}
+        function $(op)(a::ComboFun{T, N, B}) where {T, N, B <: OrthoBasis}
             ComboFun(a.basis, map($op, a.coeffs))
         end
     end
 end
-for op in (:(Base.:+), :(Base.:-), :(Base.:*), :(Base.:/))
+for op in (:(Base.:+), :(Base.:-), :(Base.:*), :(Base.:/), :(Base.:exp), :(Base.:^))
     @eval begin
         function $op(a::ComboFun{T, N, B}, b::ComboFun{S, N, B}) where {T, S, N, B <: OrthoBasis}
             @assert a.basis == b.basis
@@ -67,7 +68,7 @@ for op in (:(Base.:+), :(Base.:-), :(Base.:*), :(Base.:/))
             throw(NotImplementedError())
         end
         function $op(a, b::ComboFun{T, N, B}) where {T, N, B <: OrthoBasis}
-            ComboFun(a.basis, $op.(a.coeffs, b))
+            ComboFun(b.basis, $op.(a, b.coeffs))
         end
         function $op(a::Fun, b::ComboFun{T, N, B}) where {T, N, B <: OrthoBasis}
             throw(NotImplementedError())
@@ -108,9 +109,12 @@ end
 LagrangeFun(points::AbstractVector, n) = LagrangeFun{eltype(points), typeof(points)}(points, n)
 (f::LagrangeFun)(x...) = apply(f, SVector(x...))
 #This method is mostly here for clarity, it probably shouldn't be called (TODO specialize somewhere with a stable interpolation routine)
-function apply(f::LagrangeFun, x::AbstractVector)
+function apply(f::LagrangeFun{T}, x::AbstractVector{S}) where {T, S}
     @assert length(x) == 1
-    res = prod(ntuple(i->i == f.n ? 1 : (x[1] - f.points[i])/(f.points[f.n] - f.points[i]), length(f.points)))
+    T′ = promote_type(T, S)
+    T′ = Base.promote_op(/, T′, T′)
+    res = prod(ntuple(i->i == f.n ? one(T) : (x[1] - f.points[i])/(f.points[f.n] - f.points[i]), length(f.points)))
+    res::T′
 end
 
 #A basis of polynomials
