@@ -5,9 +5,18 @@ using TotallyNotApproxFun
 using StaticArrays
 using Base.Iterators
 
-dim = 2
+const dim = 2
+const order = 3
+const hasGPU = Base.find_package("GPUMeshing") !== nothing
 
-mesh = PeriodicCartesianMesh(CartesianIndices(ntuple(i-> 1:10, dim)))
+if hasGPU
+    using GPUMeshing
+    backend = GPU()
+else
+    backend = CPU()
+end
+
+mesh = PeriodicCartesianMesh(ntuple(i-> 1:10, dim); backend=backend)
 
 # the whole mesh will go from X⃗₀ to X⃗₁
 # (to add a vector arrow to a quantity like `v⃗`, type `v\vec` and then press tab.)
@@ -30,7 +39,7 @@ X⃗⁻¹    = map(i -> MultilinearFun(I⃗(i), I⃗(i) + 1, -1.0, 1.0), mesh)
 
 # Here is where we construct our basis. In our case, we've chosen an order 3 Lagrange basis over 3 + 1 Lobatto points
 
-ψ = ProductBasis(repeat([LagrangeBasis(LobattoPoints(3))], dim)...)
+ψ = ProductBasis(repeat([LagrangeBasis(LobattoPoints(order))], dim)...)
 
 # Setting some initial conditions
 

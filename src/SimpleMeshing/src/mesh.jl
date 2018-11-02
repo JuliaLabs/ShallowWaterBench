@@ -67,10 +67,10 @@ function Base.map(f::F, mesh::Mesh) where F
 end
 
 """
-    CartesianMesh{N, B} <: Mesh{N, B} 
+    CartesianMesh{N, B} <: Mesh{N, B}
 
 A `CartesianMesh` is a [`Mesh`](@ref) over a cartesian space.
-The faces of a elem in a `CartesianMesh` are [`CartesianNeighbors`](@ref), 
+The faces of a elem in a `CartesianMesh` are [`CartesianNeighbors`](@ref),
 and the elem indicies are [`CartesianIndex`](@ref).
 """
 abstract type CartesianMesh{N, B} <: Mesh{N, B} end
@@ -86,7 +86,7 @@ Base.getindex(::CartesianNeighbors{N}, i::Int) where {N} = CartesianIndex(ntuple
                                                                                                     0 , N))
 Base.iterate(cn::CartesianNeighbors) = (cn[1], 2)
 Base.iterate(cn::CartesianNeighbors, i) = i <= length(cn) ? (cn[i], i+1) : nothing
-Base.IteratorSize(::CartesianNeighbors) = Base.HasShape{1}()	
+Base.IteratorSize(::CartesianNeighbors) = Base.HasShape{1}()
 Base.eltype(cn::CartesianNeighbors{N}) where N = CartesianIndex{N}
 Base.map(f::F, cn::CartesianNeighbors{N}) where {F,N} = ntuple(i->f(cn[i]), 2N)
 
@@ -101,7 +101,9 @@ struct PeriodicCartesianMesh{N, B} <: CartesianMesh{N, B}
         new{N, B}(inds)
     end
 end
-PeriodicCartesianMesh(inds::CartesianIndices) = PeriodicCartesianMesh(CPU(), inds)
+PeriodicCartesianMesh(inds::CartesianIndices; backend = CPU()) = PeriodicCartesianMesh(backend, inds)
+PeriodicCartesianMesh(space::Tuple; backend = CPU()) = PeriodicCartesianMesh(backend, CartesianIndices(space))
+PeriodicCartesianMesh(ranges::AbstractUnitRange...; backend = CPU()) = PeriodicCartesianMesh(ranges; backend = backend)
 
 elems(mesh::PeriodicCartesianMesh) = mesh.inds
 
@@ -123,7 +125,7 @@ function storage(::Type{T}, mesh::PeriodicCartesianMesh{N, CPU}) where {T, N}
     return OffsetArray(underlying, inds.indices)
 end
 
-function translate(mesh::PeriodicCartesianMesh{N}, boundary) where N 
+function translate(mesh::PeriodicCartesianMesh{N}, boundary) where N
     pI = axes(elems(mesh))
     b = ntuple(N) do i
         b = boundary.indices[i]
@@ -147,20 +149,22 @@ struct GhostCartesianMesh{N, B} <: CartesianMesh{N, B}
         new{N, B}(inds)
     end
 end
-GhostCartesianMesh(inds::CartesianIndices) = GhostCartesianMesh(CPU(), inds)
+GhostCartesianMesh(inds::CartesianIndices; backend = CPU()) = GhostCartesianMesh(backend, inds)
+GhostCartesianMesh(space::Tuple; backend = CPU()) = GhostCartesianMesh(backend, CartesianIndices(space))
+GhostCartesianMesh(ranges::AbstractUnitRange...; backend = CPU()) = GhostCartesianMesh(ranges; backend = backend)
 
-elems(mesh::GhostCartesianMesh) = mesh.inds 
+elems(mesh::GhostCartesianMesh) = mesh.inds
 neighbor(elem, face, mesh::GhostCartesianMesh) = elem + face
 
 function overelems(f::F, mesh::GhostCartesianMesh{N, CPU}, args...) where {F, N}
-    for I in elems(mesh) 
+    for I in elems(mesh)
         f(I, mesh, args...)
     end
 end
 
 function storage(::Type{T}, mesh::GhostCartesianMesh{N, CPU}) where {T, N}
     inds = elems(mesh).indices
-    inds = ntuple(N) do i 
+    inds = ntuple(N) do i
         I = inds[i]
         (first(I)-1):(last(I)+1)
     end
