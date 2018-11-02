@@ -88,7 +88,7 @@ function apply(f::ProductFun, x::AbstractVector)
     prod(apply.(SVector(f.funs), SVector.(x)))
 end
 
-#A basis which is a cartesian product of one-dimensional bases
+#A basis which is an outer product of one-dimensional bases
 struct ProductBasis{T, N, B <: Tuple{Vararg{OrthoBasis{T, 1}, N}}} <: OrthoBasis{T, N, Fun{T, N}}
     bases::B
     ProductBasis(basis::OrthoBasis{T, 1}) where {T} = new{T, 1, Tuple{typeof(basis)}}((basis,))
@@ -96,6 +96,7 @@ struct ProductBasis{T, N, B <: Tuple{Vararg{OrthoBasis{T, 1}, N}}} <: OrthoBasis
 end
 
 Base.size(b::ProductBasis) = map(length, b.bases)
+Base.Broadcast.BroadcastStyle(b::ProductBasis{T, N}) where {T, N} = StaticArrays.StaticArrayStyle{N}() #TODO specialize for static sizes instead of this function
 Base.eltype(b::ProductBasis{T, N}) where {T, N} = ProductFun{T, N, Tuple{eltype.(b.bases)...}}
 Base.getindex(b::ProductBasis, i::Int...)::eltype(b) = ProductFun(map(getindex, b.bases, i)...)
 points(b::ProductBasis) = SArray{Tuple{length.(points.(b.bases))...}}(SVector.(product(points.(b.bases)...))) #TODO specialize `product` for static sizes instead of this function
