@@ -1,3 +1,5 @@
 [deps]
-CUDAdrv = "c5f51814-7f29-56b8-a69c-e4d8f6be1fde"
-CUDAnative = "be33ccc6-a3ff-5ff2-a52e-74243cff1e17"
+GPUMeshing = "e13cbf70-dde4-11e8-20f0-c12cd972e7c8"
+SimpleMeshing = "c9d4e704-dde4-11e8-203c-b9e6aaa84b04"
+StructsOfArrays = "bc3139fe-dde4-11e8-0467-3b5d72ee84e5"
+TotallyNotApproxFun = "ac408ca2-de02-11e8-2e84-c5797921eb19"
