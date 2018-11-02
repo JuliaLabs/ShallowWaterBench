@@ -1,6 +1,6 @@
 module Meshing
     export Mesh, CartesianMesh, PeriodicCartesianMesh, GhostCartesianMesh, CPU
-    export faces, neighbor, neighbors, overelems, storage
+    export faces, neighbor, neighbors, overelems, storage, elems
     export ghostboundary, backend, translate
 
 using Base.Cartesian
@@ -50,8 +50,20 @@ neighbors(elem, mesh::Mesh) = map(face -> neighbor(elem, face, mesh), faces(elem
 """
 overelems(f, mesh::Mesh, args...) = throw(MethodError(overelems, (typeof(f), typeof(mesh), typeof(args))))
 
-elemindices(mesh::Mesh) = throw(MethodError(elemindices, (typeof(Mesh),)))
+elems(mesh::Mesh) = throw(MethodError(elems, (typeof(Mesh),)))
 storage(::Type{T}, mesh::Mesh) where T = throw(MethodError(storage, (T, typeof(Mesh),)))
+
+function Base.map(f::F, mesh::Mesh) where F
+    T = Base._return_type(f, (eltype(elems(mesh)), ))
+    if !isconcretetype(T)
+        error("$f does not infer")
+    end
+    out = storage(T, mesh)
+    overelems(mesh, f, out) do I, mesh, f, out
+        out[I] = f(I)
+    end
+    return out
+end
 
 """
     CartesianMesh{N, B} <: Mesh{N, B} 
@@ -90,7 +102,7 @@ struct PeriodicCartesianMesh{N, B} <: CartesianMesh{N, B}
 end
 PeriodicCartesianMesh(inds::CartesianIndices) = PeriodicCartesianMesh(CPU(), inds)
 
-elemindices(mesh::PeriodicCartesianMesh) = mesh.inds
+elems(mesh::PeriodicCartesianMesh) = mesh.inds
 
 Base.mod(x::T, y::AbstractUnitRange{T}) where {T<:Integer} = y[mod1(x - y[1] + 1, length(y))]
 Base.mod(x::CartesianIndex{N}, y::CartesianIndices{N}) where {N} = CartesianIndex(ntuple(n->mod(x[n], axes(y)[n]), N))
@@ -99,19 +111,19 @@ neighbor(elem, face, mesh::PeriodicCartesianMesh) =
     (elem + face) in mesh.inds ? elem + face : mod(elem + face, mesh.inds)
 
 function overelems(f::F, mesh::PeriodicCartesianMesh{N, CPU}, args...) where {F, N}
-    for I in elemindices(mesh)
+    for I in elems(mesh)
         f(I, mesh, args...)
     end
 end
 
 function storage(::Type{T}, mesh::PeriodicCartesianMesh{N, CPU}) where {T, N}
-    inds = elemindices(mesh)
+    inds = elems(mesh)
     underlying = Array{T}(undef, map(length, axes(inds))...)
     return OffsetArray(underlying, inds.indices)
 end
 
 function translate(mesh::PeriodicCartesianMesh{N}, boundary) where N 
-    pI = axes(elemindices(mesh))
+    pI = axes(elems(mesh))
     b = ntuple(N) do i
         b = boundary.indices[i]
         length(b) > 1 ? b : mod(b[1], pI[i])
@@ -136,17 +148,17 @@ struct GhostCartesianMesh{N, B} <: CartesianMesh{N, B}
 end
 GhostCartesianMesh(inds::CartesianIndices) = GhostCartesianMesh(CPU(), inds)
 
-elemindices(mesh::GhostCartesianMesh) = mesh.inds 
+elems(mesh::GhostCartesianMesh) = mesh.inds 
 neighbor(elem, face, mesh::GhostCartesianMesh) = elem + face
 
 function overelems(f::F, mesh::GhostCartesianMesh{N, CPU}, args...) where {F, N}
-    for I in elemindices(mesh) 
+    for I in elems(mesh) 
         f(I, mesh, args...)
     end
 end
 
 function storage(::Type{T}, mesh::GhostCartesianMesh{N, CPU}) where {T, N}
-    inds = elemindices(mesh).indices
+    inds = elems(mesh).indices
     inds = ntuple(N) do i 
         I = inds[i]
         (first(I)-1):(last(I)+1)
@@ -163,8 +175,8 @@ end
 Gives the local indicies that need to be updated
 """
 function ghostboundary(mesh::GhostCartesianMesh{N}) where N
-    fI = first(elemindices(mesh))
-    lI = last(elemindices(mesh))
+    fI = first(elems(mesh))
+    lI = last(elems(mesh))
 
     upper = ntuple(Val(N)) do i
         head, tail = select(fI, lI, i)
@@ -191,13 +203,5 @@ end
     return head, tail
 end
 
-#    Peter's Super Cool Functions
-export elems
-
-#elemindices should really just be called elems
-elems(mesh::Mesh) = elemindices(mesh)
-
-#map over the mesh, returning an appropriate similar array type
-Base.map(f, mesh::Mesh{N, CPU}) where N = map(f, elemindices(mesh))
 
 end # module

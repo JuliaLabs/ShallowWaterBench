@@ -22,7 +22,7 @@ struct GPU <: Meshing.Backend end
 import .Meshing: storage, overelems
 
 function storage(::Type{T}, mesh::PeriodicCartesianMesh{N, GPU}) where {T, N}
-    inds = elemindices(mesh)
+    inds = elems(mesh)
     underlying = CuArray{T}(undef, map(length, axes(inds))...)
     return OffsetArray(underlying, inds.indices)
 end
@@ -32,7 +32,7 @@ function overelems(f::F, mesh::PeriodicCartesianMesh{N, GPU}, args...) where {F,
 end
 
 function storage(::Type{T}, mesh::GhostCartesianMesh{N, GPU}) where {T, N}
-    inds = elemindices(mesh).indices
+    inds = elems(mesh).indices
     inds = ntuple(N) do i 
         I = inds[i]
         (first(I)-1):(last(I)+1)

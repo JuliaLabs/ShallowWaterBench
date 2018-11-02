@@ -9,6 +9,8 @@ dim = 2
 globalInds = CartesianIndices(ntuple(i-> 1:1024, dim))
 globalMesh = PeriodicCartesianMesh(CartesianIndices(globalInds))
 
+@test all(map(identity, globalMesh) .== elems(globalMesh))
+
 data = storage(Int64, globalMesh)
 
 overelems(globalMesh, data) do elem, mesh, out
