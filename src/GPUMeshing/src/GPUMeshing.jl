@@ -11,8 +11,6 @@ using StructsOfArrays
 using CuArrays
 using CUDAnative
 
-using CuArrays: @cuindex
-
 StructsOfArrays._type_with_eltype(::Type{<:CuArray}, T, N) = CuArray{T, N}
 StructsOfArrays._type_with_eltype(::Type{CuDeviceArray{_T,_N,AS}}, T, N) where{_T,_N,AS} = CuDeviceArray(T,N,AS)
 
@@ -32,6 +30,7 @@ function storage(::Type{T}, mesh::PeriodicCartesianMesh{N, GPU}) where {T, N}
 end
 
 function overelems(f::F, mesh::PeriodicCartesianMesh{N, GPU}, args...) where {F, N}
+
     function kernelf(f::F, elems, mesh, args...) where F
         i = (blockIdx().x-1) * blockDim().x + threadIdx().x
         i > length(elems) && return nothing
@@ -39,6 +38,9 @@ function overelems(f::F, mesh::PeriodicCartesianMesh{N, GPU}, args...) where {F,
         f(I, mesh, args...)
         return nothing
     end
+
+    # The below does this:
+    # @cuda threads=length(elems(mesh)) kernelf(f, elems(mesh), mesh, args...)
     cuargs = (f, elems(mesh), mesh, args...)
     GC.@preserve cuargs begin
         kernel_args = map(x->adapt(CUDAnative.Adaptor(), x), cuargs)
