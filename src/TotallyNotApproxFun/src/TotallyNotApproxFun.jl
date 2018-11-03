@@ -25,7 +25,7 @@ function Base.show(io::IO, f::Fun{T}) where {T}
     show(IOContext(io, :typeinfo=>T), value(f))
 end
 
-#We'll work on this.
+#An approximation of the value of a function (used for printing). For now, most of our funs happen to be defined on -1 to 1. In the future, defining funs over a `Space` type would allow us to implement something more precise here.
 value(f) = f(0)
 
 #A discretization of a (T-valued function)-valued function in an N-Dimensional space.
