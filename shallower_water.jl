@@ -26,6 +26,7 @@ X⃗₀ = SVector(2.0, 2.0)
 X⃗₁ = SVector(123.0, 100.0)
 I⃗₀ = first(elems(mesh))
 I⃗₁ = last(elems(mesh))
+const Î = one(I⃗₀)
 
 # I⃗      is a function which maps indices to coordinates
 # I⃗⁻¹    is a function which maps coordinates to indicies
@@ -36,8 +37,8 @@ const I⃗      = MultilinearFun(I⃗₀, I⃗₁, X⃗₀, X⃗₁)
 I⃗⁻¹(x⃗) = CartesianIndex(floor.(Int, MultilinearFun(X⃗₀, X⃗₁, I⃗₀, I⃗₁)(x⃗))...)
 # test all(I == I⃗⁻¹(I⃗(I)) for I in elems(mesh))
 # Due to floating-point imprecisions that does not hold exactly everywhere
-X⃗      = map(i -> MultilinearFun(-1.0, 1.0, I⃗(i), I⃗(i) + 1), mesh)
-X⃗⁻¹    = map(i -> MultilinearFun(I⃗(i), I⃗(i) + 1, -1.0, 1.0), mesh)
+X⃗      = map(i -> MultilinearFun(-1.0, 1.0, I⃗(i), I⃗(i + Î)), mesh)
+X⃗⁻¹    = map(i -> MultilinearFun(I⃗(i), I⃗(i + Î), -1.0, 1.0), mesh)
 
 # Here is where we construct our basis. In our case, we've chosen an order 3 Lagrange basis over 3 + 1 Lobatto points
 
