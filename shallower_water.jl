@@ -5,6 +5,7 @@ using TotallyNotApproxFun
 using StaticArrays
 using Base.Iterators
 using LinearAlgebra
+using Test
 
 const dim = 2
 const order = 3
@@ -39,6 +40,15 @@ I⃗⁻¹(x⃗) = CartesianIndex(floor.(Int, MultilinearFun(X⃗₀, X⃗₁, I�
 # Due to floating-point imprecisions that does not hold exactly everywhere
 X⃗      = map(i -> MultilinearFun(-1.0, 1.0, I⃗(i), I⃗(i + Î)), mesh)
 X⃗⁻¹    = map(i -> MultilinearFun(I⃗(i), I⃗(i + Î), -1.0, 1.0), mesh)
+
+@inferred X⃗[1]((1, 2))
+using InteractiveUtils
+display(@code_typed MultilinearFun(-1.0, 1.0, I⃗(CartesianIndex(1, 2)), I⃗(CartesianIndex(1, 2) + Î)))
+println()
+@inferred MultilinearFun(-1.0, 1.0, I⃗(CartesianIndex(1, 2)), I⃗(CartesianIndex(1, 2) + Î))
+display(@code_typed((MultilinearFun(-1.0, 1.0, I⃗(CartesianIndex(1, 2)), I⃗(CartesianIndex(1, 2) + Î)))(1, 2)))
+println()
+@inferred ((MultilinearFun(-1.0, 1.0, I⃗(CartesianIndex(1, 2)), I⃗(CartesianIndex(1, 2) + Î)))(1, 2))
 
 # Here is where we construct our basis. In our case, we've chosen an order 3 Lagrange basis over 3 + 1 Lobatto points
 

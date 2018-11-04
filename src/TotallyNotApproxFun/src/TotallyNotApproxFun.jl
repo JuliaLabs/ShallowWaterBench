@@ -40,9 +40,10 @@ end
 (f::ComboFun)(x...) = apply(f, SVector(x...))
 #f(x) is just sum_i(c_i * b_i(x))
 function apply(f::ComboFun, x::AbstractVector)
-    y = f.coeffs[1] * (f.basis[1])(x)
-    for i in 2:length(f.coeffs)
-        y += f.coeffs[i] * (f.basis[i])(x)
+    i = first(eachindex(f.coeffs))
+    y = f.coeffs[i] * apply(f.basis[i], x)
+    for i in eachindex(f.coeffs)[2:end]
+        y += f.coeffs[i] * apply(f.basis[i], x)
     end
     return y
 end
@@ -88,8 +89,12 @@ struct ProductFun{T, N, F <: Tuple{Vararg{Fun{T, 1}, N}}} <: Fun{T, N}
 end
 
 (f::ProductFun)(x...) = apply(f, SVector(x...))
-function apply(f::ProductFun, x::AbstractVector)
-    prod(apply.(SVector(f.funs), SVector.(x)))
+function apply(f::ProductFun{T, N}, x::AbstractVector) where {T, N}
+    y = apply(f.funs[1], SVector(x[1]))
+    for i in 1:N
+        y *= apply(f.funs[i], SVector(x[i]))
+    end
+    y
 end
 
 #A basis which is an outer product of one-dimensional bases
@@ -147,21 +152,22 @@ LobattoPoints(n) = LobattoPoints{Float64, n + 1}()
 #Base.Broadcast.broadcastable(p::LobattoPoints) = SArray{Tuple{size(p)...}}(p)
 
 #A vector-valued function composed of one-dimensional functions
-struct VectorFun{T, N, F <: Tuple{Vararg{Fun{T, 1}, N}}} <: Fun{SVector{N, T}, N}
+struct VectorFun{T, N, F <: Tuple{Vararg{Fun{<:Any, 1}, N}}} <: Fun{SVector{N, T}, N}
     funs::F
-    VectorFun(x::Fun{T, 1}) where {T} = new{T, 1, Tuple{typeof(x)}}((x,))
-    VectorFun(x::Fun{T, 1}...) where {T} = new{T, length(x), typeof(x)}(x)
+    VectorFun(x::Fun{<:T, 1}...) where {T} = new{T, length(x), typeof(x)}(x)
 end
 
 (f::VectorFun)(x...) = apply(f, SVector(x...))
-function apply(f::VectorFun, x::AbstractVector)
+function apply(f::VectorFun{T, N}, x::AbstractVector) where {T, N}
     apply.(SVector(f.funs), SVector.(x))
 end
 
-
 function MultilinearFun(x₀, x₁, y₀, y₁)
-    VectorFun(ComboFun.(LagrangeBasis.(SVector.(SVector(x₀), SVector(x₁))), SVector.(SVector(y₀), SVector(y₁)))...)
+    x₀, x₁, y₀, y₁ = (SVector(x₀), SVector(x₁), SVector(y₀), SVector(y₁))
+    VectorFun(Tuple(ComboFun.(LagrangeBasis.(SVector.(x₀, x₁)), SVector.(y₀, y₁)))...)
 end
+
+
 
 #r = repositioner(SVector(2.0, 4.0), SVector(3.0, 5.0), SVector(-1.0, -1.0), SVector(1.0, 1.0))
 
@@ -171,6 +177,7 @@ end
 
 #WARNING DEFINING AN SARRAY METHOD
 StaticArrays.SVector(i::CartesianIndex) = SVector(Tuple(i))
+
 
 function Base.collect(it::Base.Iterators.ProductIterator{Tuple{Vararg{SArray}}})
     SArray{Tuple{size(it)...},eltype(it),ndims(it),length(it)}(it...)
