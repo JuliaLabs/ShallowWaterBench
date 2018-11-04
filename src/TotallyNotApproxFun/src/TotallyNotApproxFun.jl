@@ -97,8 +97,7 @@ end
 Base.size(b::ProductBasis) = map(length, b.bases)
 Base.eltype(b::ProductBasis{T, N}) where {T, N} = ProductFun{T, N, Tuple{map(eltype, b.bases)...}}
 Base.getindex(b::ProductBasis, i::Int...)::eltype(b) = ProductFun(map(getindex, b.bases, i)...)
-points(b::ProductBasis) = SArray{Tuple{length.(points.(b.bases))...}}(SVector.(product(points.(b.bases)...))) #TODO generalize to non-static children
-#points(b::ProductBasis) = collect(product(points.(b.bases)))
+points(b::ProductBasis) = collect(product(map(points, b.bases)...))
 #Base.Broadcast.broadcastable(b::ProductBasis) = SArray{Tuple{size(b)...}}(b) #TODO generalize to non-static children
 
 #The minimum-degree polynomial function which is 1 at the nth point and 0 at the other points
@@ -150,8 +149,6 @@ function apply(f::VectorFun, x::AbstractVector)
     apply.(SVector(f.funs), SVector.(x))
 end
 
-#WARNING DEFINING AN SARRAY METHOD
-StaticArrays.SVector(i::CartesianIndex) = SVector(Tuple(i))
 
 function MultilinearFun(x₀, x₁, y₀, y₁)
     x₀, x₁, y₀, y₁ = map(Tuple, (x₀, x₁, y₀, y₁))
@@ -164,6 +161,12 @@ end
 #using InteractiveUtils
 #@code_warntype(r([3.4, 4.5]))
 
+#WARNING DEFINING AN SARRAY METHOD
+StaticArrays.SVector(i::CartesianIndex) = SVector(Tuple(i))
+
+function Base.collect(it::Base.Iterators.ProductIterator{Tuple{Vararg{SArray}}})
+    SArray{Tuple{size(it)...},eltype(it),ndims(it),length(it)}(it...)
+end
 
 
 
