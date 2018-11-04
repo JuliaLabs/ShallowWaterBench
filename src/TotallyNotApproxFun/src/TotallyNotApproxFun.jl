@@ -40,7 +40,7 @@ end
 (f::ComboFun)(x...) = apply(f, SVector(x...))
 #f(x) is just sum_i(c_i * b_i(x))
 function apply(f::ComboFun, x::AbstractVector)
-    return sum(f.coeffs .* (apply.(f.basis, Ref(x))))
+    sum(f.coeffs[i] * (f.basis[i])(x) for i in eachindex(f.coeffs))
 end
 
 #A basis corresponding to a set of points, where the basis function i is one(T) at point i and zero(T) everywhere else
@@ -94,12 +94,12 @@ struct ProductBasis{T, N, B <: Tuple{Vararg{OrthoBasis{T, 1}, N}}} <: OrthoBasis
     ProductBasis(basis::OrthoBasis{T, 1}) where {T} = new{T, 1, Tuple{typeof(basis)}}((basis,))
     ProductBasis(bases::OrthoBasis{T, 1}...) where {T} = new{T, length(bases), typeof(bases)}(bases)
 end
-
 Base.size(b::ProductBasis) = map(length, b.bases)
-Base.Broadcast.BroadcastStyle(b::ProductBasis{T, N}) where {T, N} = StaticArrays.StaticArrayStyle{N}() #TODO specialize for static sizes instead of this function
-Base.eltype(b::ProductBasis{T, N}) where {T, N} = ProductFun{T, N, Tuple{eltype.(b.bases)...}}
+Base.eltype(b::ProductBasis{T, N}) where {T, N} = ProductFun{T, N, Tuple{map(eltype, b.bases)...}}
 Base.getindex(b::ProductBasis, i::Int...)::eltype(b) = ProductFun(map(getindex, b.bases, i)...)
-points(b::ProductBasis) = SArray{Tuple{length.(points.(b.bases))...}}(SVector.(product(points.(b.bases)...))) #TODO specialize `product` for static sizes instead of this function
+points(b::ProductBasis) = SArray{Tuple{length.(points.(b.bases))...}}(SVector.(product(points.(b.bases)...))) #TODO generalize to non-static children
+#points(b::ProductBasis) = collect(product(points.(b.bases)))
+#Base.Broadcast.broadcastable(b::ProductBasis) = SArray{Tuple{size(b)...}}(b) #TODO generalize to non-static children
 
 #The minimum-degree polynomial function which is 1 at the nth point and 0 at the other points
 struct LagrangeFun{T, P <: AbstractVector{T}} <: Fun{T, 1}
@@ -114,7 +114,7 @@ function apply(f::LagrangeFun{T}, x::AbstractVector{S}) where {T, S}
     @assert length(x) == 1
     T′ = promote_type(T, S)
     T′ = Base.promote_op(/, T′, T′)
-    res = prod(ntuple(i->i == f.n ? one(T) : (x[1] - f.points[i])/(f.points[f.n] - f.points[i]), length(f.points)))
+    res = prod(i == f.n ? one(T) : (x[1] - f.points[i])/(f.points[f.n] - f.points[i]) for i in eachindex(f.points))
     res::T′
 end
 
@@ -126,6 +126,7 @@ end
 Base.size(b::LagrangeBasis) = size(b.points)
 Base.getindex(b::LagrangeBasis, i::Int) = LagrangeFun(b.points, i)
 points(b::LagrangeBasis) = b.points
+#Base.Broadcast.broadcastable(b::LagrangeBasis) = SArray{Tuple{size(b)...}}(b) #TODO generalize to non-static children
 
 #A vector representing Lobatto Points
 struct LobattoPoints{T, N} <: AbstractVector{T} end
@@ -135,22 +136,7 @@ Base.size(p::LobattoPoints{T, N}) where {T, N} = (N,)
     return :($(SVector{N, T}(gausslobatto(N)[1]))[i])
 end
 LobattoPoints(n) = LobattoPoints{Float64, n + 1}()
-
-#=
-#A vector-valued array composed of one-dimensional arrays
-struct VectorArray{T, N, A <: Tuple{Vararg{AbstractVector{T}, N}}} <: AbstractArray{SVector{N, T}, N}
-    data::A
-    VectorArray(x::AbstractVector{T, 1}) where {T} = new{T, 1, Tuple{typeof(x)}}((x,))
-    VectorArray(x::AbstractVector{T, 1}...) where {T} = new{T, length(x), typeof(x)}(x)
-end
-
-(f::VectorFun)(x) = apply(f, SVector(x))
-(f::VectorFun)(x::AbstractVector) = apply(f, x)
-(f::VectorFun)(x...) = apply(f, SVector(x...))
-function apply(f::VectorFun, x::AbstractVector)
-    apply.(SVector(f.funs), SVector.(x))
-end
-=#
+#Base.Broadcast.broadcastable(p::LobattoPoints) = SArray{Tuple{size(p)...}}(p)
 
 #A vector-valued function composed of one-dimensional functions
 struct VectorFun{T, N, F <: Tuple{Vararg{Fun{T, 1}, N}}} <: Fun{SVector{N, T}, N}
