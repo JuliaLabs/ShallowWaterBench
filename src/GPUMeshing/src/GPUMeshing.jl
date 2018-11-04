@@ -30,7 +30,18 @@ function storage(::Type{T}, mesh::PeriodicCartesianMesh{N, GPU}) where {T, N}
     return OffsetArray(underlying, inds.indices)
 end
 
-function overelems(f::F, mesh::PeriodicCartesianMesh{N, GPU}, args...) where {F, N}
+function storage(::Type{T}, mesh::GhostCartesianMesh{N, GPU}) where {T, N}
+    inds = elems(mesh).indices
+    inds = ntuple(N) do i
+        I = inds[i]
+        (first(I)-1):(last(I)+1)
+    end
+
+    underlaying = CuArray{T}(undef, map(length, inds)...)
+    return OffsetArray(underlaying, inds)
+end
+
+function overelems(f::F, mesh::CartesianMesh{N, GPU}, args...) where {F, N}
 
     function kernelf(f::F, elems, mesh, args...) where F
         i = (blockIdx().x-1) * blockDim().x + threadIdx().x
@@ -61,21 +72,6 @@ function overelems(f::F, mesh::PeriodicCartesianMesh{N, GPU}, args...) where {F,
         kernel(kernel_args...; threads=threads, blocks=blocks)
     end
     return nothing
-end
-
-function storage(::Type{T}, mesh::GhostCartesianMesh{N, GPU}) where {T, N}
-    inds = elems(mesh).indices
-    inds = ntuple(N) do i
-        I = inds[i]
-        (first(I)-1):(last(I)+1)
-    end
-
-    underlaying = CuArray{T}(undef, map(length, inds)...)
-    return OffsetArray(underlaying, inds)
-end
-
-function overelems(f::F, mesh::GhostCartesianMesh{N, GPU}, args...) where {F, N}
-    error("Not implemented yet")
 end
 
 ##
