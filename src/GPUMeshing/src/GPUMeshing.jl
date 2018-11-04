@@ -6,6 +6,7 @@ using Adapt
 using OffsetArrays
 
 Adapt.adapt_structure(to, x::OffsetArray) = OffsetArray(adapt(to, parent(x)), x.offsets)
+Base.Broadcast.BroadcastStyle(::Type{<:OffsetArray{<:Any, <:Any, AA}}) where AA = Base.Broadcast.BroadcastStyle(AA)
 
 using StructsOfArrays
 using CuArrays
