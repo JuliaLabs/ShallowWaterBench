@@ -77,42 +77,4 @@ function overelems(f::F, mesh::GhostCartesianMesh{N, GPU}, args...) where {F, N}
     error("Not implemented yet")
 end
 
-##
-# Support for CUDA-aware MPI
-#
-# TODO:
-# - We need a way to query for MPI support
-##
-import MPI
-function MPI.Isend(buf::CuArray{T}, dest::Integer, tag::Integer,
-                            comm::MPI.Comm) where T
-    _buf = CuArrays.buffer(buf)
-    GC.@preserve _buf begin
-        MPI.Isend(Base.unsafe_convert(Ptr{T}, _buf), length(buf), dest, tag, comm)
-    end
-end
-
-function MPI.Irecv!(buf::CuArray{T}, src::Integer, tag::Integer,
-    comm::MPI.Comm) where T
-    _buf = CuArrays.buffer(buf)
-    GC.@preserve _buf begin
-        MPI.Irecv!(Base.unsafe_convert(Ptr{T}, _buf), length(buf), src, tag, comm)
-    end
-end
-
-##
-# Support for CUDA pinned host buffers
-##
-import CUDAdrv
-function alloc(::Type{T}, dims) where T
-    r_ptr = Ref{Ptr{Cvoid}}()
-    nbytes = prod(dims) * sizeof(T)
-    CUDAdrv.@apicall(:cuMemAllocHost, (Ptr{Ptr{Cvoid}}, Csize_t), r_ptr, nbytes)
-    unsafe_wrap(Array, convert(Ptr{T}, r_ptr[]), dims, #=own=#false)
-end
-
-function free(arr)
-    CUDAdrv.@apicall(:cuMemFreeHost, (Ptr{Cvoid},), arr)
-end
-
 end # module

@@ -3,11 +3,9 @@ uuid = "e13cbf70-dde4-11e8-20f0-c12cd972e7c8"
 
 [deps]
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
-CUDAdrv = "c5f51814-7f29-56b8-a69c-e4d8f6be1fde"
 CUDAnative = "be33ccc6-a3ff-5ff2-a52e-74243cff1e17"
 CuArrays = "3a865a2d-5b23-5a0f-bc46-62713ec82fae"
 GPUArrays = "0c68f7d7-f131-5f86-a1c3-88cf8149b2d7"
-MPI = "da04e1cc-30fd-572f-bb4f-1f8673147195"
 OffsetArrays = "6fe1bfb0-de20-5000-8ca7-80f57d26f881"
 SimpleMeshing = "c9d4e704-dde4-11e8-203c-b9e6aaa84b04"
 StructsOfArrays = "bc3139fe-dde4-11e8-0467-3b5d72ee84e5"
