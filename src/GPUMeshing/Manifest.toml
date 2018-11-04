@@ -154,6 +154,12 @@ uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 [[Logging]]
 uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
 
+[[MPI]]
+deps = ["BinDeps", "Compat", "Distributed", "Libdl", "LinearAlgebra", "Printf", "Random", "Statistics", "Test"]
+git-tree-sha1 = "b932f8e7115a60208692d474c45d5d6fcea10659"
+uuid = "da04e1cc-30fd-572f-bb4f-1f8673147195"
+version = "0.7.2"
+
 [[MacroTools]]
 deps = ["Compat"]
 git-tree-sha1 = "c443e1c8d58a4e9f61b708ad0a88286c7042145b"
