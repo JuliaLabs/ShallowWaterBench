@@ -77,4 +77,10 @@ function overelems(f::F, mesh::GhostCartesianMesh{N, GPU}, args...) where {F, N}
     error("Not implemented yet")
 end
 
+##
+# Hacks
+##
+import Base.Broadcast
+Broadcast.broadcasted(::Broadcast.DefaultArrayStyle{1}, ::typeof(+), r::AbstractUnitRange, x::Real) = Base._range(first(r) + x, nothing, nothing, length(r))
+
 end # module
