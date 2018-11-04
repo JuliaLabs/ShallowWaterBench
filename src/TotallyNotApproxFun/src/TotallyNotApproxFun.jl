@@ -42,7 +42,8 @@ end
 function apply(f::ComboFun, x::AbstractVector)
     i = first(eachindex(f.coeffs))
     y = f.coeffs[i] * apply(f.basis[i], x)
-    for i in eachindex(f.coeffs)[2:end]
+    y -= y
+    for i in eachindex(f.coeffs)
         y += f.coeffs[i] * apply(f.basis[i], x)
     end
     return y
