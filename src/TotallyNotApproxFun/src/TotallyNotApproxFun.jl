@@ -40,7 +40,11 @@ end
 (f::ComboFun)(x...) = apply(f, SVector(x...))
 #f(x) is just sum_i(c_i * b_i(x))
 function apply(f::ComboFun, x::AbstractVector)
-    sum(f.coeffs[i] * (f.basis[i])(x) for i in eachindex(f.coeffs))
+    y = f.coeffs[1] * (f.basis[1])(x)
+    for i in 2:length(f.coeffs)
+        y += f.coeffs[i] * (f.basis[i])(x)
+    end
+    return y
 end
 
 #A basis corresponding to a set of points, where the basis function i is one(T) at point i and zero(T) everywhere else
@@ -113,8 +117,13 @@ function apply(f::LagrangeFun{T}, x::AbstractVector{S}) where {T, S}
     @assert length(x) == 1
     T′ = promote_type(T, S)
     T′ = Base.promote_op(/, T′, T′)
-    res = prod(i == f.n ? one(T) : (x[1] - f.points[i])/(f.points[f.n] - f.points[i]) for i in eachindex(f.points))
-    res::T′
+    y = one(T′)
+    for i in eachindex(f.points)
+        if i != f.n
+            y *= (x[1] - f.points[i])/(f.points[f.n] - f.points[i])
+        end
+    end
+    y::T′
 end
 
 #A basis of polynomials
@@ -151,8 +160,7 @@ end
 
 
 function MultilinearFun(x₀, x₁, y₀, y₁)
-    x₀, x₁, y₀, y₁ = map(Tuple, (x₀, x₁, y₀, y₁))
-    VectorFun(ComboFun.(LagrangeBasis.(SVector.(x₀, x₁)), SVector.(y₀, y₁))...)
+    VectorFun(ComboFun.(LagrangeBasis.(SVector.(SVector(x₀), SVector(x₁))), SVector.(SVector(y₀), SVector(y₁)))...)
 end
 
 #r = repositioner(SVector(2.0, 4.0), SVector(3.0, 5.0), SVector(-1.0, -1.0), SVector(1.0, 1.0))
