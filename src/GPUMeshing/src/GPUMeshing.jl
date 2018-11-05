@@ -2,22 +2,6 @@ module GPUMeshing
 
 export GPU
 
-using Adapt
-using OffsetArrays
-
-Adapt.adapt_structure(to, x::OffsetArray) = OffsetArray(adapt(to, parent(x)), x.offsets)
-Base.Broadcast.BroadcastStyle(::Type{<:OffsetArray{<:Any, <:Any, AA}}) where AA = Base.Broadcast.BroadcastStyle(AA)
-
-using StructsOfArrays
-using CuArrays
-using CUDAnative
-
-StructsOfArrays._type_with_eltype(::Type{<:CuArray}, T, N) = CuArray{T, N}
-StructsOfArrays._type_with_eltype(::Type{CuDeviceArray{_T,_N,AS}}, T, N) where{_T,_N,AS} = CuDeviceArray(T,N,AS)
-
-StructsOfArrays._type(::Type{<:CuArray}) = CuArray
-StructsOfArrays._type(::Type{<:CuDeviceArray}) = CuDeviceArray
-
 using SimpleMeshing
 using .Meshing
 
@@ -75,10 +59,46 @@ function overelems(f::F, mesh::CartesianMesh{N, GPU}, args...) where {F, N}
 end
 
 ##
+# Compatibility with other packages
+##
+using Adapt
+using OffsetArrays
+
+Adapt.adapt_structure(to, x::OffsetArray) = OffsetArray(adapt(to, parent(x)), x.offsets)
+Base.Broadcast.BroadcastStyle(::Type{<:OffsetArray{<:Any, <:Any, AA}}) where AA = Base.Broadcast.BroadcastStyle(AA)
+
+using StructsOfArrays
+using CuArrays
+using CUDAnative
+
+StructsOfArrays._type_with_eltype(::Type{<:CuArray}, T, N) = CuArray{T, N}
+StructsOfArrays._type_with_eltype(::Type{CuDeviceArray{_T,_N,AS}}, T, N) where{_T,_N,AS} = CuDeviceArray(T,N,AS)
+
+StructsOfArrays._type(::Type{<:CuArray}) = CuArray
+StructsOfArrays._type(::Type{<:CuDeviceArray}) = CuDeviceArray
+
+##
 # Hacks
 ##
 import Base.Broadcast
 Broadcast.broadcasted(::Broadcast.DefaultArrayStyle{1}, ::typeof(+), r::AbstractUnitRange, x::Real) = Base._range(first(r) + x, nothing, nothing, length(r))
+
+##
+# GPU broadcasting
+##
+using GPUArrays
+@inline function Base.copyto!(dest::OffsetArray{<:Any, <:Any, <:GPUArray}, bc::Broadcast.Broadcasted{Nothing})
+    axes(dest) == axes(bc) || Broadcast.throwdm(axes(dest), axes(bc))
+    bc′ = Broadcast.preprocess(dest, bc)
+    gpu_call(dest, (dest, bc′)) do state, dest, bc′
+        let I = CartesianIndex(@cartesianidx(dest))
+            @inbounds dest[I] = bc′[I]
+        end
+        return
+    end
+
+    return dest
+end
 
 ##
 # Compatibility between TotallyNotApproxFun and CUDAnative
