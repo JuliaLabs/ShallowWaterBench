@@ -80,4 +80,37 @@ end
 import Base.Broadcast
 Broadcast.broadcasted(::Broadcast.DefaultArrayStyle{1}, ::typeof(+), r::AbstractUnitRange, x::Real) = Base._range(first(r) + x, nothing, nothing, length(r))
 
+##
+# Compatibility between TotallyNotApproxFun and CUDAnative
+##
+import TotallyNotApproxFun: ComboFun, OrthoBasis
+
+for op in (:(CUDAnative.:exp),)
+    @eval begin
+        function $(op)(a::ComboFun{T, N, B}) where {T, N, B <: OrthoBasis}
+            ComboFun(a.basis, map($op, a.coeffs))
+        end
+    end
+end
+for op in (:(CUDAnative.:exp), )
+    @eval begin
+        function $op(a::ComboFun{T, N, B}, b::ComboFun{S, N, B}) where {T, S, N, B <: OrthoBasis}
+            @assert a.basis == b.basis
+            ComboFun(a.basis, $op.(a.coeffs, b.coeffs))
+        end
+        function $op(a::ComboFun{T, N, B}, b) where {T, N, B <: OrthoBasis}
+            ComboFun(a.basis, $op.(a.coeffs, b))
+        end
+        function $op(a::ComboFun{T, N, B}, b::Fun) where {T, N, B <: OrthoBasis}
+            throw(NotImplementedError())
+        end
+        function $op(a, b::ComboFun{T, N, B}) where {T, N, B <: OrthoBasis}
+            ComboFun(b.basis, $op.(a, b.coeffs))
+        end
+        function $op(a::Fun, b::ComboFun{T, N, B}) where {T, N, B <: OrthoBasis}
+            throw(NotImplementedError())
+        end
+    end
+end
+
 end # module

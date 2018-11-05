@@ -9,6 +9,7 @@ GPUArrays = "0c68f7d7-f131-5f86-a1c3-88cf8149b2d7"
 OffsetArrays = "6fe1bfb0-de20-5000-8ca7-80f57d26f881"
 SimpleMeshing = "c9d4e704-dde4-11e8-203c-b9e6aaa84b04"
 StructsOfArrays = "bc3139fe-dde4-11e8-0467-3b5d72ee84e5"
+TotallyNotApproxFun = "ac408ca2-de02-11e8-2e84-c5797921eb19"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
