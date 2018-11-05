@@ -1,7 +1,13 @@
+using MPI
+
+MPI.Initialized() || MPI.Init() # only initialize MPI if not initialized
+MPI.finalize_atexit()
+
 using SimpleMeshing
 using .Meshing
 using .Partitions
 using Test
+
 
 dim = 2
 
@@ -10,7 +16,8 @@ ranks = convert(Array, reshape(0:(2^dim-1), ntuple(_->2, dim)))
 globalInds = CartesianIndices(ntuple(i-> 1:1024, dim))
 globalMesh = PeriodicCartesianMesh(CartesianIndices(globalInds))
 
-myrank = 2
+const mpicomm = MPI.COMM_WORLD
+myrank = MPI.Comm_rank(mpicomm)
 
 P = CartesianPartition(globalInds, ranks)
 inds = rankindices(P, myrank)
@@ -37,5 +44,27 @@ let z = mpistorage(Complex{Int8}, mesh)
     flush_recvbufs!(z, mesh)
     for (bidx, buf) in ghostboundaries(mesh)
         @test all(z[bidx] .== 1+1im)
+    end
+end
+
+
+s = mpistorage(Float64, mesh)
+fill!(s, myrank)
+@show s.arr
+P = CartesianPartition(globalInds, ranks)
+
+nbs = map(ghostboundaries(mesh), boundaries(mesh)) do ghostelems, elems
+    locate(P, translate(globalMesh, ghostelems))
+end
+
+for iter = 1:3
+    overelems(mesh,iter, s) do elem, m, iter, s
+        ns = neighbors(elem, m)
+        s[elem] = sum(map(j->s[elem] * (iter-1), ns)) + s[elem]
+    end
+
+    sync!(s, mesh, nbs)
+    overelems(mesh,iter, s) do elem,m, iter, s
+        s[elem] = s[elem] / iter
     end
 end
