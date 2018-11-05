@@ -245,4 +245,34 @@ end
 end
 
 
+struct BufferedArray{T, N, A<:AbstractArray{T,N}} <: AbstractArray{T,N}
+    arr::A
+    recv_buffers::Tuple
+    send_buffers::Tuple
+end
+
+Base.size(a::BufferedArray) = a.arr
+Base.getindex(a::BufferedArray, idx...) = a.arr[idx...]
+Base.setindex!(a::BufferedArray, args...) = setindex!(a.arr, args...)
+Base.IndexStyle(a::BufferedArray) = IndexStyle(a.arr)
+
+function flush_recvbufs!(a::BufferedArray, mesh::GhostCartesianMesh)
+    for (bidx, buf) in zip(ghostboundaries(mesh), a.recv_buffers)
+        a[bidx] = buf
+    end
+end
+
+function fill_sendbufs!(a::BufferedArray, mesh::GhostCartesianMesh)
+    for (bidx, buf) in zip(ghostboundaries(mesh), a.recv_buffers)
+        buf .= a[bidx]
+    end
+end
+
+function mpistorage(::Type{T}, mesh::GhostCartesianMesh{N, CPU}) where {T, N}
+    recv_bufs = map(idxs -> Array(T, size(idxs)), ghostboundaries(mesh))
+    send_bufs = map(idxs -> Array(T, size(idxs)), ghostboundaries(mesh))
+    BufferedArray(storage(T, mesh), recv_bufs, send_bufs)
+end
+
+
 end # module
