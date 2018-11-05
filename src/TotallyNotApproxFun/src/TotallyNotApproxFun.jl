@@ -5,7 +5,7 @@ using StaticArrays
 using Base.Iterators
 using LinearAlgebra
 
-export Fun, ComboFun, ApproxFun, ProductFun, LagrangeFun, VectorFun, MultilinearFun
+export Fun, ComboFun, approximate, ProductFun, LagrangeFun, VectorFun, MultilinearFun
 export Basis, OrthoBasis, ProductBasis, LagrangeBasis
 export points, LobattoPoints
 
@@ -51,7 +51,7 @@ end
 #A basis corresponding to a set of points, where the basis function i is one(T) at point i and zero(T) everywhere else
 abstract type OrthoBasis{T, N, F} <: Basis{T, N, F} end
 points(::OrthoBasis) = error("Subtypes of OrthoBasis must define the points function")
-ApproxFun(f, b::OrthoBasis) = ComboFun(b, map(f, points(b)))
+approximate(f, b::OrthoBasis) = ComboFun(b, map(f, points(b)))
 
 for op in (:(Base.:+), :(Base.:-), :(Base.zero), :(LinearAlgebra.transpose), :(LinearAlgebra.norm), :(Base.:exp))
     @eval begin
@@ -139,6 +139,9 @@ end
 Base.size(b::LagrangeBasis) = size(b.points)
 Base.getindex(b::LagrangeBasis, i::Int) = LagrangeFun(b.points, i)
 points(b::LagrangeBasis) = b.points
+@generated weights(b::LagrangeBasis{T, LobattoPoints{T, N}}) where {T, N}
+    return :($(SVector{N, T}(gausslobatto(N)[2])))
+end
 #Base.Broadcast.broadcastable(b::LagrangeBasis) = SArray{Tuple{size(b)...}}(b) #TODO generalize to non-static children
 
 #A vector representing Lobatto Points
@@ -167,37 +170,63 @@ function MultilinearFun(x₀, x₁, y₀, y₁)
     VectorFun(Tuple(ComboFun.(LagrangeBasis.(SVector.(x₀, x₁)), SVector.(y₀, y₁)))...)
 end
 
+∫_Ω(f::ComboFun) = sum(∫_Ω.(f.basis) .* f.coeffs)
+
+∫_Ω(f::ProductFun) = prod(∫_Ω.(f.funs)...)
+
+∫_Ω(f::LagrangeFun) = lagrange_weights(f.points)[f.n]
+
+function Base.map(::typeof(∫_Ω), b::LagrangeBasis)
+    lagrange_weights(b.points)
+end
+
+function ∫_Ω(f::ComboFun{T, N, B<:ProductBasis{T, N}}) where {T, N, B}
+    t = map(basis -> map(∫_Ω, basis), f.basis.bases) #these are actually the weights
+    sum(prod.(collect(product(t...))) .* f.coeffs)
+end
+
+∇(f::ComboFun) = sum(∇(b) * c for (b, c) in zip(f.basis, f.coeff))
+
+∇(f::LagrangeFun) = ComboFun(spectralderivative(f.points)[:#=?=#, f.n], LagrangeBasis(f.points))
+
+∇(f::LagrangeBasis) = [ComboFun(spectralderivative(b.points)[:#=?=#, n], LagrangeBasis(b.points)) for n in eachindex(points)]
+
+function ∇(f::ComboFun{<:Any, N, <:ProductBasis{T, N, B<:Tuple{Vararg{<:LagrangeBasis}}}}) where {N}
+    things = [mapslices(c-> spectralderivative(b.points) * c, f.coeffs, dims=i) for (i, b) in enumerate(f.basis.bases)]
+    ComboFun(SVector.(things...), f.basis)
+end
+
+Typeof(b::Base.Broadcast.Broadcasted{<:Any, <:Any, F}) where {F} = Base.Broadcast.Broadcasted{<:Any, <:Any, F, Tuple{map(Typeof, b.args)...}}
+Typeof(x) = x
+Base.Broadcast.broadcasted(typeof(Typeof), arg) = Typeof(arg)
+
+function Base.Broadcast.materialize(r, b::(Typeof.(∫_Ω.(∇.(transpose.(B)), F)))) where {T, N, B<:ProductBasis{T, N, B<:Tuple{Vararg{<:LagrangeBasis}}}, C<:ComboFun{<:Any, N, B}}
+    #                 ∫_Ω.      *.      '.      ∇.
+    basis = materialize(b.args[1].args[1].args[1].args[1])
+    #             ∫_Ω.      *.
+    f = materialize(b.args[1].args[2])
+    ∫_Ω∇⋅(b, f)
+end
+
+function ∫_ΩΨ∇⋅(b::B, f::ComboFun{S, N, B}) where {T, S, N, B<:ProductBasis{T, N}}
+    t = map(basis -> map(∫_Ω, basis), f.basis.bases) #these are actually the weights
+    ω = prod.(collect(product(t...)))
+    return sum(mapslices(c->D(f.basis.bases[n])' * c, ω.(getindex.(f.coeffs, n)), dims=n) for n in 1:N)
+end
+#=
+    fluxh = ComposedFun(fluxh, coordinateremapper)
+    array = ∫_Ω.(dot.(∇.(Ψ), dX⃗ * fluxh * J))
+=#
 
 
-#r = repositioner(SVector(2.0, 4.0), SVector(3.0, 5.0), SVector(-1.0, -1.0), SVector(1.0, 1.0))
 
-#println(r([3.4, 4.5]))
-#using InteractiveUtils
-#@code_warntype(r([3.4, 4.5]))
 
-#WARNING DEFINING AN SARRAY METHOD
+#OVERRIDES
+
 StaticArrays.SVector(i::CartesianIndex) = SVector(Tuple(i))
-
 
 function Base.collect(it::Base.Iterators.ProductIterator{Tuple{Vararg{SArray}}})
     SArray{Tuple{size(it)...},eltype(it),ndims(it),length(it)}(it...)
 end
-
-
-
-
-
-
-
-
-
-
-#1 function to interpolate global coefficients to local -1 to 1 for basis
-#  a) only store scale in type domain
-#  b) store scale and offset
-
-#2 implement ∫ψ(f, ω, J) and ∫∇ψ(f) on combination functions (and handle the fact that f is repositioned) (f = f(reposition(x)))
-
-#3 implement ∫ and ∫∇ on combination functions (and handle the fact that f is repositioned) (f = f(reposition(x)))
 
 end

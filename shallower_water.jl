@@ -29,17 +29,17 @@ I⃗₀ = first(elems(mesh))
 I⃗₁ = last(elems(mesh))
 const Î = one(I⃗₀)
 
-# I⃗      is a function which maps indices to coordinates
-# I⃗⁻¹    is a function which maps coordinates to indicies
-# X⃗[i]   is a function which maps element coordinates (-1.0 to 1.0) to coordinates
-# X⃗⁻¹[i] is a function which maps coordinates to element coordinates (-1.0 to 1.0)
+# I⃗⁻¹      is a function which maps indices to coordinates
+# I⃗        is a function which maps coordinates to indicies
+# X⃗⁻¹[i]   is a function which maps element coordinates (-1.0 to 1.0) to coordinates
+# X⃗[i] is a function which maps coordinates to element coordinates (-1.0 to 1.0)
 
-const I⃗      = MultilinearFun(I⃗₀, I⃗₁, X⃗₀, X⃗₁)
-I⃗⁻¹(x⃗) = CartesianIndex(floor.(Int, MultilinearFun(X⃗₀, X⃗₁, I⃗₀, I⃗₁)(x⃗))...)
+const I⃗⁻¹      = MultilinearFun(I⃗₀, I⃗₁, X⃗₀, X⃗₁)
+I⃗(x⃗)    = CartesianIndex(floor.(Int, MultilinearFun(X⃗₀, X⃗₁, I⃗₀, I⃗₁)(x⃗))...)
 # test all(I == I⃗⁻¹(I⃗(I)) for I in elems(mesh))
 # Due to floating-point imprecisions that does not hold exactly everywhere
-X⃗      = map(i -> MultilinearFun(-1.0, 1.0, I⃗(i), I⃗(i + Î)), mesh)
-X⃗⁻¹    = map(i -> MultilinearFun(I⃗(i), I⃗(i + Î), -1.0, 1.0), mesh)
+X⃗⁻¹    = map(i -> MultilinearFun(-1.0, 1.0, I⃗(i), I⃗(i + Î)), mesh)
+X⃗      = map(i -> MultilinearFun(I⃗(i), I⃗(i + Î), -1.0, 1.0), mesh)
 
 # Here is where we construct our basis. In our case, we've chosen an order 3 Lagrange basis over 3 + 1 Lobatto points
 
@@ -47,21 +47,32 @@ X⃗⁻¹    = map(i -> MultilinearFun(I⃗(i), I⃗(i + Î), -1.0, 1.0), mesh)
 
 # Set initial conditions
 
-ΨX⃗ = ApproxFun.(X⃗, Ref(Ψ))
+approximate(f) = map(i -> approximate(x->f(X⃗[i](x)), Ψ), mesh)
 
-r = norm.(ΨX⃗ .- 0.5)
-bathymetry = zero.(r).+0.2
-h = 0.5 .* exp.(-100.0 .* r)
-U⃗ = zero.(ΨX⃗)
+r          = approximate(x⃗ -> norm(x⃗ - 0.5))
+bathymetry = approximate(x⃗ -> eltype(x⃗) * 0.2)
+h          = approximate(x⃗ -> 0.5 * exp(-100.0 * r(x⃗)))
+U⃗          = approximate(x⃗ -> zero(x⃗))
+dX⃗         = ∇(X⃗⁻¹[1])
+J          = det(dX⃗)
 
-#↑ this stuff works
-#↓ this stuff doesn't
-
-#=
 dt = 0.0025
 nsteps = ceil(Int64, tend / dt)
 dt = tend / nsteps
 
+overelems(mesh) do elem, mesh
+    #function volumerhs!(rhs, Q::NamedTuple{S, NTuple{3, T}}, bathymetry, metric, D, ω, elems, gravity, δnl) where {S, T}
+    ht    = h[elem] + bathymetry[elem]
+    u⃗     = U⃗[elem] / ht
+    fluxh = U⃗[elem]
+    Δh    = ComboFun(∫_Ω.(dot.(∇.(Ψ), dX⃗ * fluxh * J)), Ψ)
+    fluxU⃗ = ((u⃗ * u⃗' * ht) + I * 0.5 * gravity * hs^2) * δnl + I * gravity * h[elem] * bathymetry[elem]
+    ΔU⃗    = ComboFun(∫_Ω.(dot.(∇.(Ψ), dX⃗ * fluxU⃗ * J)), Ψ)
+end
+
+#↑ this stuff works
+#↓ this stuff doesn't
+#=
 
 ht = h .+ bathymetry
 #function volumerhs!(rhs, Q::NamedTuple{S, NTuple{3, T}}, bathymetry, metric, D, ω, elems, gravity, δnl) where {S, T}
