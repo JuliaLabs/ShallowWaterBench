@@ -1,6 +1,7 @@
 using SimpleMeshing
 using .Meshing
 using .Partitions
+using Test
 
 dim = 2
 
@@ -16,5 +17,25 @@ inds = rankindices(P, myrank)
 
 mesh = GhostCartesianMesh(CPU(), inds)
 
-z = mpistorage(Complex{Int8}, mesh)
-fill!(z, 0+0im)
+let z = mpistorage(Complex{Int8}, mesh)
+    fill!(z, 42+42im)
+
+    for (bidx, buf) in zip(ghostboundaries(mesh), z.recv_buffers)
+        @test z[bidx] != buf
+    end
+
+    fill_sendbufs!(z, mesh)
+
+    for (bidx, buf) in zip(ghostboundaries(mesh), z.recv_buffers)
+        @test z[bidx] == buf
+    end
+
+    for buf in z.recv_buffers
+        fill!(buf, 1+1im)
+    end
+
+    flush_recvbufs!(z, mesh)
+    for (bidx, buf) in ghostboundaries(mesh)
+        @test all(z[bidx] .== 1+1im)
+    end
+end

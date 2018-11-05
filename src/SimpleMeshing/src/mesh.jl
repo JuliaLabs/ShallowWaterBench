@@ -254,12 +254,13 @@ end
 
 Base.size(a::BufferedArray) = size(a.arr)
 Base.getindex(a::BufferedArray, idx...) = a.arr[idx...]
-Base.setindex!(a::BufferedArray, args...) = setindex!(a.arr, args...)
+Base.setindex!(a::BufferedArray, val, idx...) = a.arr[idx...] = val
+Base.axes(a::BufferedArray) = axes(a.arr) # now includes offsets
 Base.IndexStyle(a::BufferedArray) = IndexStyle(a.arr)
 
 function flush_recvbufs!(a::BufferedArray, mesh::GhostCartesianMesh)
     for (bidx, buf) in zip(ghostboundaries(mesh), a.recv_buffers)
-        a[bidx] = buf
+        a[bidx] .= buf
     end
 end
 
