@@ -2,6 +2,7 @@ module Meshing
     export Mesh, CartesianMesh, PeriodicCartesianMesh, GhostCartesianMesh, CPU
     export faces, neighbor, neighbors, overelems, storage, elems
     export ghostboundaries, boundaries, backend, translate
+    export BufferedArray, mpistorage, fill_sendbufs!, flush_recvbufs!
 
 using Base.Cartesian
 using OffsetArrays
@@ -251,7 +252,7 @@ struct BufferedArray{T, N, A<:AbstractArray{T,N}} <: AbstractArray{T,N}
     send_buffers::Tuple
 end
 
-Base.size(a::BufferedArray) = a.arr
+Base.size(a::BufferedArray) = size(a.arr)
 Base.getindex(a::BufferedArray, idx...) = a.arr[idx...]
 Base.setindex!(a::BufferedArray, args...) = setindex!(a.arr, args...)
 Base.IndexStyle(a::BufferedArray) = IndexStyle(a.arr)
@@ -269,10 +270,9 @@ function fill_sendbufs!(a::BufferedArray, mesh::GhostCartesianMesh)
 end
 
 function mpistorage(::Type{T}, mesh::GhostCartesianMesh{N, CPU}) where {T, N}
-    recv_bufs = map(idxs -> Array(T, size(idxs)), ghostboundaries(mesh))
-    send_bufs = map(idxs -> Array(T, size(idxs)), ghostboundaries(mesh))
+    recv_bufs = map(idxs -> Array{T}(undef, size(idxs)), ghostboundaries(mesh))
+    send_bufs = map(idxs -> Array{T}(undef, size(idxs)), ghostboundaries(mesh))
     BufferedArray(storage(T, mesh), recv_bufs, send_bufs)
 end
-
 
 end # module
