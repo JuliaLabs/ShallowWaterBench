@@ -83,7 +83,7 @@ Broadcast.broadcasted(::Broadcast.DefaultArrayStyle{1}, ::typeof(+), r::Abstract
 ##
 # Compatibility between TotallyNotApproxFun and CUDAnative
 ##
-import TotallyNotApproxFun: ComboFun, OrthoBasis
+import TotallyNotApproxFun: ComboFun, OrthoBasis, Fun
 
 for op in (:(CUDAnative.:exp),)
     @eval begin
