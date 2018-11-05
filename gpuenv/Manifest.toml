@@ -126,7 +126,7 @@ uuid = "0c68f7d7-f131-5f86-a1c3-88cf8149b2d7"
 version = "0.5.0+"
 
 [[GPUMeshing]]
-deps = ["Adapt", "CUDAnative", "CuArrays", "GPUArrays", "OffsetArrays", "SimpleMeshing", "StructsOfArrays"]
+deps = ["Adapt", "CUDAnative", "CuArrays", "GPUArrays", "OffsetArrays", "SimpleMeshing", "StructsOfArrays", "TotallyNotApproxFun"]
 path = "../src/GPUMeshing"
 uuid = "e13cbf70-dde4-11e8-20f0-c12cd972e7c8"
 version = "0.0.0"

@@ -42,7 +42,8 @@ end
 function apply(f::ComboFun, x::AbstractVector)
     i = first(eachindex(f.coeffs))
     y = f.coeffs[i] * apply(f.basis[i], x)
-    for i in eachindex(f.coeffs)[2:end]
+    y -= y
+    for i in eachindex(f.coeffs)
         y += f.coeffs[i] * apply(f.basis[i], x)
     end
     return y
@@ -200,6 +201,7 @@ Typeof(b::Base.Broadcast.Broadcasted{<:Any, <:Any, F}) where {F} = Base.Broadcas
 Typeof(x) = x
 Base.Broadcast.broadcasted(typeof(Typeof), arg) = Typeof(arg)
 
+
 function Base.Broadcast.materialize(r, b::(Typeof.(∫_Ω.(∇.(transpose.(B)), F)))) where {T, N, B<:ProductBasis{T, N, B<:Tuple{Vararg{<:LagrangeBasis}}}, C<:ComboFun{<:Any, N, B}}
     #                 ∫_Ω.      *.      '.      ∇.
     basis = materialize(b.args[1].args[1].args[1].args[1])
@@ -213,10 +215,6 @@ function ∫_ΩΨ∇⋅(b::B, f::ComboFun{S, N, B}) where {T, S, N, B<:ProductBa
     ω = prod.(collect(product(t...)))
     return sum(mapslices(c->D(f.basis.bases[n])' * c, ω.(getindex.(f.coeffs, n)), dims=n) for n in 1:N)
 end
-#=
-    fluxh = ComposedFun(fluxh, coordinateremapper)
-    array = ∫_Ω.(dot.(∇.(Ψ), dX⃗ * fluxh * J))
-=#
 
 
 
@@ -225,7 +223,11 @@ end
 
 StaticArrays.SVector(i::CartesianIndex) = SVector(Tuple(i))
 
-function Base.collect(it::Base.Iterators.ProductIterator{Tuple{Vararg{SArray}}})
+function Base.collect(it::Base.Iterators.ProductIterator{<:Tuple{Vararg{SArray}}})
+    SArray{Tuple{size(it)...},eltype(it),ndims(it),length(it)}(it...)
+end
+
+function Base.collect(it::Base.Iterators.ProductIterator{<:Tuple{Vararg{LobattoPoints}}})
     SArray{Tuple{size(it)...},eltype(it),ndims(it),length(it)}(it...)
 end
 

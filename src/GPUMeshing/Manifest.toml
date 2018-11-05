@@ -99,6 +99,12 @@ git-tree-sha1 = "29cda58afbf62f35b1a094882ad6c745a47b2eaa"
 uuid = "7a1cc6ca-52ef-59f5-83cd-3a7055c09341"
 version = "0.2.4"
 
+[[FastGaussQuadrature]]
+deps = ["Compat", "LinearAlgebra", "SpecialFunctions"]
+git-tree-sha1 = "3861ecfe06076f9310a43469fbb676aaeba7893d"
+uuid = "442a2c76-b920-505d-bb47-c5924d526838"
+version = "0.3.2"
+
 [[FillArrays]]
 deps = ["LinearAlgebra", "Random", "SparseArrays", "Test"]
 git-tree-sha1 = "d87b7fc5c086cf157deabec625d53ba55eca6436"
@@ -255,6 +261,12 @@ version = "0.0.0"
 [[Test]]
 deps = ["Distributed", "InteractiveUtils", "Logging", "Random"]
 uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[[TotallyNotApproxFun]]
+deps = ["FastGaussQuadrature", "LinearAlgebra", "StaticArrays"]
+path = "../TotallyNotApproxFun"
+uuid = "ac408ca2-de02-11e8-2e84-c5797921eb19"
+version = "0.0.0"
 
 [[URIParser]]
 deps = ["Test", "Unicode"]
