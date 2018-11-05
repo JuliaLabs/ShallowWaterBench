@@ -180,14 +180,13 @@ end
 StaticArrays.SVector(i::CartesianIndex) = SVector(Tuple(i))
 
 
-function Base.collect(it::Base.Iterators.ProductIterator{Tuple{Vararg{SArray}}})
+function Base.collect(it::Base.Iterators.ProductIterator{<:Tuple{Vararg{SArray}}})
     SArray{Tuple{size(it)...},eltype(it),ndims(it),length(it)}(it...)
 end
 
-
-
-
-
+function Base.collect(it::Base.Iterators.ProductIterator{<:Tuple{Vararg{LobattoPoints}}})
+    SArray{Tuple{size(it)...},eltype(it),ndims(it),length(it)}(it...)
+end
 
 
 
