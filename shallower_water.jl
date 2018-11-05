@@ -13,6 +13,7 @@ const order = 3
 if Base.find_package("GPUMeshing") !== nothing
     using GPUMeshing
     backend = GPU()
+    GPUMeshing.CuArrays.allowscalar(false)
 else
     backend = CPU()
 end
