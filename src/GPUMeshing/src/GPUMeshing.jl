@@ -87,6 +87,7 @@ Broadcast.broadcasted(::Broadcast.DefaultArrayStyle{1}, ::typeof(+), r::Abstract
 # GPU broadcasting
 ##
 using GPUArrays
+GPUArrays.backend(::Type{<:OffsetArray{<:Any, <:Any, AA}}) where AA<:GPUArray = GPUArrays.backend(AA)
 @inline function Base.copyto!(dest::OffsetArray{<:Any, <:Any, <:GPUArray}, bc::Broadcast.Broadcasted{Nothing})
     axes(dest) == axes(bc) || Broadcast.throwdm(axes(dest), axes(bc))
     bc′ = Broadcast.preprocess(dest, bc)
