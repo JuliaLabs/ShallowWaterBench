@@ -20,7 +20,7 @@
 > OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 > SOFTWARE.
 
-`src/shallow_water.jl`, `src/euler_cuarray.jl` and `src/vtk.jl` are taken from the Canary.jl package which is in the public domain:
+`original/shallow_water.jl`, `original/euler_cuarray.jl` and `original/vtk.jl` are taken from the Canary.jl package which is in the public domain:
 
 > This software was developed by employees of the Naval Postgraduate School
 > which is part of the Federal Government and is being made available as a
