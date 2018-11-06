@@ -171,17 +171,17 @@ function MultilinearFun(x₀, x₁, y₀, y₁)
     VectorFun(Tuple(ComboFun.(LagrangeBasis.(SVector.(x₀, x₁)), SVector.(y₀, y₁)))...)
 end
 
-∫_Ω(f::ComboFun) = sum(∫_Ω.(f.basis) .* f.coeffs)
+∫(f::ComboFun) = sum(∫.(f.basis) .* f.coeffs)
 
-∫_Ω(f::ProductFun) = prod(∫_Ω.(f.funs)...)
+∫(f::ProductFun) = prod(∫.(f.funs)...)
 
-∫_Ω(f::LagrangeFun) = lagrange_weights(f.points)[f.n]
+∫(f::LagrangeFun) = lagrange_weights(f.points)[f.n]
 
-function Base.map(::typeof(∫_Ω), b::LagrangeBasis)
+function Base.map(::typeof(∫), b::LagrangeBasis)
     lagrange_weights(b.points)
 end
 
-function ∫_Ω(f::ComboFun{T, N, B<:ProductBasis{T, N}}) where {T, N, B}
+function ∫(f::ComboFun{T, N, B<:ProductBasis{T, N}}) where {T, N, B}
     t = map(basis -> map(∫_Ω, basis), f.basis.bases) #these are actually the weights
     sum(prod.(collect(product(t...))) .* f.coeffs)
 end
@@ -197,26 +197,16 @@ function ∇(f::ComboFun{<:Any, N, <:ProductBasis{T, N, B<:Tuple{Vararg{<:Lagran
     ComboFun(SVector.(things...), f.basis)
 end
 
-Typeof(b::Base.Broadcast.Broadcasted{<:Any, <:Any, F}) where {F} = Base.Broadcast.Broadcasted{<:Any, <:Any, F, Tuple{map(Typeof, b.args)...}}
-Typeof(x) = x
-Base.Broadcast.broadcasted(typeof(Typeof), arg) = Typeof(arg)
-
-
-function Base.Broadcast.materialize(r, b::(Typeof.(∫_Ω.(∇.(transpose.(B)) .* F)))) where {T, N, B<:ProductBasis{T, N, B<:Tuple{Vararg{<:LagrangeBasis}}}, C<:ComboFun{<:Any, N, B}}
-    #                 ∫_Ω.      *.      '.      ∇.
-    basis = materialize(b.args[1].args[1].args[1].args[1])
-    #             ∫_Ω.      *.
-    f = materialize(b.args[1].args[2])
-    ∫_Ω∇⋅(b, f)
-end
-
-function ∫_ΩΨ∇⋅(b::B, f::ComboFun{S, N, B}) where {T, S, N, B<:ProductBasis{T, N}}
-    t = map(basis -> map(∫_Ω, basis), f.basis.bases) #these are actually the weights
+function ∫Ψ∇⋅(f::ComboFun{S, N, B}) where {T, S, N, B<:ProductBasis{T, N}}
+    t = map(basis -> map(∫, basis), f.basis.bases) #these are actually the weights
     ω = prod.(collect(product(t...)))
-    return sum(mapslices(c->D(f.basis.bases[n])' * c, ω.(getindex.(f.coeffs, n)), dims=n) for n in 1:N)
+    return ComboFun(sum(mapslices(c->D(f.basis.bases[n])' * c, ω.(getindex.(f.coeffs, n)), dims=n) for n in 1:N), f.basis.bases)
 end
 
-∫∇⋅(fun) == ComboFun(∫∇Ψ⋅(fun), Ψ)
+function ∫Ψ(f::ComboFun)
+    return ComboFun(f.coeffs .* map(∫, f.basis), f.basis)
+end
+
 
 
 
