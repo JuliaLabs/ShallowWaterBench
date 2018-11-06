@@ -202,7 +202,7 @@ Typeof(x) = x
 Base.Broadcast.broadcasted(typeof(Typeof), arg) = Typeof(arg)
 
 
-function Base.Broadcast.materialize(r, b::(Typeof.(∫_Ω.(∇.(transpose.(B)), F)))) where {T, N, B<:ProductBasis{T, N, B<:Tuple{Vararg{<:LagrangeBasis}}}, C<:ComboFun{<:Any, N, B}}
+function Base.Broadcast.materialize(r, b::(Typeof.(∫_Ω.(∇.(transpose.(B)) .* F)))) where {T, N, B<:ProductBasis{T, N, B<:Tuple{Vararg{<:LagrangeBasis}}}, C<:ComboFun{<:Any, N, B}}
     #                 ∫_Ω.      *.      '.      ∇.
     basis = materialize(b.args[1].args[1].args[1].args[1])
     #             ∫_Ω.      *.
@@ -215,6 +215,8 @@ function ∫_ΩΨ∇⋅(b::B, f::ComboFun{S, N, B}) where {T, S, N, B<:ProductBa
     ω = prod.(collect(product(t...)))
     return sum(mapslices(c->D(f.basis.bases[n])' * c, ω.(getindex.(f.coeffs, n)), dims=n) for n in 1:N)
 end
+
+∫∇⋅(fun) == ComboFun(∫∇Ψ⋅(fun), Ψ)
 
 
 
