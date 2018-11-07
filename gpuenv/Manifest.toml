@@ -38,10 +38,12 @@ uuid = "c5f51814-7f29-56b8-a69c-e4d8f6be1fde"
 version = "0.8.6"
 
 [[CUDAnative]]
-deps = ["Adapt", "CUDAapi", "CUDAdrv", "InteractiveUtils", "LLVM", "Libdl", "Pkg", "Printf", "Statistics", "Test"]
-git-tree-sha1 = "c42518fb881b9baac029cce75b6f7674e79b9d38"
+deps = ["Adapt", "CUDAapi", "CUDAdrv", "InteractiveUtils", "LLVM", "Libdl", "Logging", "Pkg", "Printf"]
+git-tree-sha1 = "41dedb251d00e66bc9f0eed910f0bb3501f4413e"
+repo-rev = "tb/nothrow"
+repo-url = "https://github.com/JuliaGPU/CUDAnative.jl.git"
 uuid = "be33ccc6-a3ff-5ff2-a52e-74243cff1e17"
-version = "0.10.0"
+version = "0.10.0+"
 
 [[CommonSubexpressions]]
 deps = ["Test"]
@@ -63,7 +65,7 @@ version = "1.1.1"
 
 [[CuArrays]]
 deps = ["AbstractFFTs", "Adapt", "CUDAapi", "CUDAdrv", "CUDAnative", "DiffRules", "ForwardDiff", "GPUArrays", "LinearAlgebra", "MacroTools", "NNlib", "Printf", "Random"]
-git-tree-sha1 = "1c7ccf99db3bd11ca3f1af4de78f66ade0d298cd"
+git-tree-sha1 = "5e2529f18f86233f10e80b0c6baa11a7b94991c5"
 repo-rev = "master"
 repo-url = "https://github.com/JuliaGPU/CuArrays.jl.git"
 uuid = "3a865a2d-5b23-5a0f-bc46-62713ec82fae"
@@ -118,8 +120,8 @@ uuid = "f6369f11-7733-5829-9624-2563aa707210"
 version = "0.10.1"
 
 [[GPUArrays]]
-deps = ["FFTW", "FillArrays", "LinearAlgebra", "Printf", "Random", "Serialization", "StaticArrays", "Test"]
-git-tree-sha1 = "ff065d4741ab7c922f588917916a08511131a9fe"
+deps = ["Adapt", "FFTW", "FillArrays", "LinearAlgebra", "Printf", "Random", "Serialization", "StaticArrays", "Test"]
+git-tree-sha1 = "f0016298a7c7c8f36a7a94694b6be5e8f663a948"
 repo-rev = "master"
 repo-url = "https://github.com/JuliaGPU/GPUArrays.jl.git"
 uuid = "0c68f7d7-f131-5f86-a1c3-88cf8149b2d7"
@@ -287,7 +289,7 @@ uuid = "30578b45-9adc-5946-b283-645ec420af67"
 version = "0.4.0"
 
 [[UUIDs]]
-deps = ["Random"]
+deps = ["Random", "SHA"]
 uuid = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 
 [[Unicode]]
