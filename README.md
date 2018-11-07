@@ -19,17 +19,7 @@ mpirun -n 4 --oversubscribe julia --project=. original/shallow_water.jl
 
 ### Setup
 
-Only necessary to run when updating packages.
-
-```bash
-module load julia-1.0
-module load mpi/openmpi-x86_64
-module load cuda-latest
-
-export JULIA_DEPOT_PATH="${HOME}/.julia"
-julia --project=.      -e "using Pkg; Pkg.instantiate(); Pkg.API.precompile()"
-julia --project=gpuenv -e "using Pkg; Pkg.instantiate(); Pkg.API.precompile()"
-```
+Run `./setup.sh` everytime that you updated a package, on the login node.
 
 ### Running normally 
 
@@ -49,3 +39,4 @@ GPU functionality we are using a stacked environment.
 ```bash
 sbatch run.sc.gpu.sh
 ```
+
