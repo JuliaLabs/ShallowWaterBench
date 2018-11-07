@@ -48,13 +48,13 @@ X⃗      = map(i -> MultilinearFun(I⃗(i), I⃗(i + Î), -1.0, 1.0), mesh)
 
 # Set initial conditions
 
-approximate(f) = map(i -> approximate(x->f(X⃗[i](x)), Ψ), mesh)
-interpolate(f, x⃗) = f[I⃗⁻¹(x⃗)](X⃗⁻¹(x⃗))
+myapproximate(f) = map(i -> approximate(x->f(X⃗[i](x)), Ψ), mesh)
+myinterpolate(f, x⃗) = f[I⃗⁻¹(x⃗)](X⃗⁻¹(x⃗))
 
-r          = approximate(x⃗ -> norm(x⃗ - 0.5))
-bathymetry = approximate(x⃗ -> eltype(x⃗) * 0.2)
-h          = approximate(x⃗ -> 0.5 * exp(-100.0 * r(x⃗)))
-U⃗          = approximate(x⃗ -> zero(x⃗))
+r          = myapproximate(x⃗ -> norm(x⃗ - 0.5))
+bathymetry = myapproximate(x⃗ -> 0.2)
+h          = myapproximate(x⃗ -> 0.5 * exp(-100.0 * norm(x⃗ - 0.5)))
+U⃗          = myapproximate(x⃗ -> zero(x⃗))
 dX⃗         = ∇(X⃗⁻¹[1])
 J          = det(dX⃗)
 sJ         = det(∇(X⃗⁻¹[1][face]))
@@ -68,14 +68,16 @@ overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, 
     ht         = h[elem] + bathymetry[elem]
     u⃗          = U⃗[elem] / ht
     fluxh      = U⃗[elem]
-    Δh[elem]  += ∫∇Ψ⋅(dX⃗ * fluxh * J)
+    Δh[elem]  += ∫∇Ψ(dX⃗ * fluxh * J)
     fluxU⃗      = (u⃗ * u⃗' * ht) + I * gravity * (0.5 * hs^2 + h[elem] * bathymetry[elem])
-    ΔU⃗[elem]  += ∫∇Ψ⋅(dX⃗ * fluxU⃗ * J)
+    ΔU⃗[elem]  += ∫∇Ψ(dX⃗ * fluxU⃗ * J)
 end
 
 #Note: try out ⋅
 
-    Δh = ComboFun(MArray(h.coeffs), h.basis)
+overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
+    myΔh = ComboFun(MArray(Δh[elem].coeffs), Δh.basis)
+    myΔU⃗ = ComboFun(MArray(ΔU⃗[elem].coeffs), ΔU⃗.basis)
     for face in faces(elem)
         elem′ = neighbor(elem, face)
 
@@ -94,17 +96,16 @@ end
         fluxU⃗′     = (u⃗′ * u⃗′' * ht′) + I * gravity * (0.5 * hs′^2 + hs′ * hb′)
         λ′         = abs(dot(normal(face) * -1, u⃗′)) + sqrt(gravity * hs′)
 
-        Δh[elem][face] -= ∫Ψ((normal(face)*(fluxh + fluxh′) - (max( λ, λ′ ) * (hs′ - hs)) / 2) * sJ)
-        ΔU⃗[elem][face] -= ∫Ψ((normal(face)*(fluxU⃗ + fluxU⃗′) - (max( λ, λ′ ) * (U⃗′ - U⃗)) / 2) * sJ)
+        myΔh[face] -= ∫Ψ((normal(face)*(fluxh + fluxh′) - (max( λ, λ′ ) * (hs′ - hs)) / 2) * sJ)
+        myΔU⃗[face] -= ∫Ψ((normal(face)*(fluxU⃗ + fluxU⃗′) - (max( λ, λ′ ) * (U⃗′ - U⃗)) / 2) * sJ)
     end
-    Δh = ComboFun(SArray(Δh.coeffs), Δh.basis)
+    Δh[elem] = ComboFun(SArray(myΔh.coeffs), myΔh.basis)
+    ΔU⃗[elem] = ComboFun(SArray(myΔU⃗.coeffs), myΔU⃗.basis)
+end
 
-
-    if (advection)
-        h = Q.h + bathymetry
-        u = Q.U ./ h
-        v = Q.V ./ h
-    end
+overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
+    ht = h[elem] + bathymetry[elem]
+    u = U⃗[elem] ./ ht
 
     M = ∫Ψ(approximate(x⃗ -> J, Ψ))
     for e ∈ elems
@@ -114,9 +115,6 @@ end
         ΔU⃗[elem] *= rka
     end
 
-    #Reset velocity
-    if (advection)
-        Q.U .= (Q.h+bathymetry) .* u
-        Q.V .= (Q.h+bathymetry) .* v
-    end
+    U⃗[elem] = (h[elem]+bathymetry) * u⃗
+end
 
