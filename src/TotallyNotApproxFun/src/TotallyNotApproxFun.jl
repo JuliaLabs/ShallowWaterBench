@@ -176,7 +176,7 @@ function MultilinearFun(x₀, x₁, y₀, y₁)
     x₀, x₁, y₀, y₁ = (SVector(x₀), SVector(x₁), SVector(y₀), SVector(y₁))
     #println(ProductBasis(LagrangeBasis.(SVector.(x₀, x₁))...))
     #this is broken.
-    ComboFun(ProductBasis(LagrangeBasis.(SVector.(x₀, x₁))...), collect(product(SVector.(y₀, y₁)...)))
+    ComboFun(ProductBasis(LagrangeBasis.(SVector.(x₀, x₁))...), SVector.(collect(product(SVector.(y₀, y₁)...))))
 end
 
 ∫(f::ComboFun) = sum(∫.(f.basis) .* f.coeffs)
