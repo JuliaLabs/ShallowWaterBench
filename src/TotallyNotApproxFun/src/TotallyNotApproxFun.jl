@@ -180,17 +180,26 @@ end
 StaticArrays.SVector(i::CartesianIndex) = SVector(Tuple(i))
 
 
-function Base.collect(it::Base.Iterators.ProductIterator{<:Tuple{Vararg{SArray}}})
-    SArray{Tuple{size(it)...},eltype(it),ndims(it),length(it)}(it...)
+function Base.collect(it::Base.Iterators.ProductIterator{TT}) where {TT<:Tuple{Vararg{LobattoPoints}}}
+    sproduct(it.iterators)
 end
 
-function Base.collect(it::Base.Iterators.ProductIterator{<:Tuple{Vararg{LobattoPoints}}})
-    SArray{Tuple{size(it)...},eltype(it),ndims(it),length(it)}(it...)
+_length(::Type{LobattoPoints{T, N}}) where {T, N} = N
+_eltype(::Type{LobattoPoints{T, N}}) where {T, N} = T
+using Base.Cartesian
+@generated function sproduct(points::TT) where {N, TT<:Tuple{Vararg{LobattoPoints, N}}}
+    lengths = map(_length, TT.parameters)
+    eltypes = map(_eltype, TT.parameters)
+    M = prod(lengths)
+    I = CartesianIndices((lengths...,))
+    quote
+        Base.@_inline_meta
+        @nexprs $N j->(P_j = points[j])
+        @nexprs $N j->(S_j = length(P_j))
+        @nexprs $M j->(elem_j = @ntuple $N k-> P_k[($I)[j][k]])
+        @ncall $M SArray{Tuple{$(lengths...)}, Tuple{$(eltypes...)}, $N, $M} elem
+    end
 end
-
-
-
-
 
 #1 function to interpolate global coefficients to local -1 to 1 for basis
 #  a) only store scale in type domain
