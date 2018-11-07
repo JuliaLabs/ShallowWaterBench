@@ -64,8 +64,8 @@ uuid = "8f4d0f93-b110-5947-807f-2305c1781a2d"
 version = "1.1.1"
 
 [[CuArrays]]
-deps = ["AbstractFFTs", "Adapt", "CUDAapi", "CUDAdrv", "CUDAnative", "DiffRules", "ForwardDiff", "GPUArrays", "LinearAlgebra", "MacroTools", "NNlib", "Printf", "Random"]
-git-tree-sha1 = "5e2529f18f86233f10e80b0c6baa11a7b94991c5"
+deps = ["AbstractFFTs", "Adapt", "CUDAapi", "CUDAdrv", "CUDAnative", "DiffRules", "ForwardDiff", "GPUArrays", "LinearAlgebra", "MacroTools", "NNlib", "Printf", "Random", "SparseArrays"]
+git-tree-sha1 = "7eb3e6dbcf19aabc84c21598f9af05f71c571402"
 repo-rev = "master"
 repo-url = "https://github.com/JuliaGPU/CuArrays.jl.git"
 uuid = "3a865a2d-5b23-5a0f-bc46-62713ec82fae"
@@ -128,7 +128,7 @@ uuid = "0c68f7d7-f131-5f86-a1c3-88cf8149b2d7"
 version = "0.5.0+"
 
 [[GPUMeshing]]
-deps = ["Adapt", "CUDAnative", "CuArrays", "GPUArrays", "OffsetArrays", "SimpleMeshing", "StructsOfArrays", "TotallyNotApproxFun"]
+deps = ["Adapt", "CUDAdrv", "CUDAnative", "CuArrays", "GPUArrays", "MPI", "OffsetArrays", "SimpleMeshing", "StructsOfArrays", "TotallyNotApproxFun"]
 path = "../src/GPUMeshing"
 uuid = "e13cbf70-dde4-11e8-20f0-c12cd972e7c8"
 version = "0.0.0"
