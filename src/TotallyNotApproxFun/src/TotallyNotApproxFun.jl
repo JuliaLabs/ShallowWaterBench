@@ -8,6 +8,7 @@ using LinearAlgebra
 export Fun, ComboFun, approximate, ProductFun, LagrangeFun, VectorFun, MultilinearFun
 export Basis, OrthoBasis, ProductBasis, LagrangeBasis
 export points, LobattoPoints
+export ∇, ∫, ∫Ψ, ∫∇Ψ
 
 #A representation of a T-valued function in an N-Dimensional space.
 abstract type Fun{T, N} end
@@ -26,7 +27,7 @@ function Base.show(io::IO, f::Fun{T}) where {T}
 end
 
 #An approximation of the value of a function (used for printing). For now, most of our funs happen to be defined on -1 to 1. In the future, defining funs over a `Space` type would allow us to implement something more precise here.
-value(f) = f(0)
+value(f::Fun{T, N}) where {T, N} = f(@SVector zeros(N))
 
 #A discretization of a (T-valued function)-valued function in an N-Dimensional space.
 abstract type Basis{T, N, F<:Fun{T, N}} <: AbstractArray{F, N} end
@@ -82,11 +83,30 @@ for op in (:(Base.:+), :(Base.:-), :(Base.:*), :(Base.:/), :(Base.:exp), :(Base.
     end
 end
 
+#A function which is a constant
+struct ConstFun{T, N} <: Fun{T, N}
+    val::T
+end
+
+(f::ConstFun)(x...) = apply(f, SVector(x...))
+function apply(f::ConstFun{T, N}, x::AbstractVector) where {T, N}
+    f.val
+end
+WrapFun(x) = ConstFun(x)
+WrapFun(x::Fun) = x
+
 #A function which is a product of one-dimensional functions
 struct ProductFun{T, N, F <: Tuple{Vararg{Fun{T, 1}, N}}} <: Fun{T, N}
     funs::F
     ProductFun(funs::Fun{T, 1}) where {T} = new{T, 1, Tuple{typeof(funs)}}((funs,))
     ProductFun(funs::Fun{T, 1}...) where {T} = new{T, length(funs), typeof(funs)}(funs)
+end
+function ProductFun(args...)
+    if any(isa.(args, Fun))
+        return ProductFun(WrapFun.(args))
+    else
+        return prod(args)
+    end
 end
 
 (f::ProductFun)(x...) = apply(f, SVector(x...))
@@ -140,9 +160,6 @@ end
 Base.size(b::LagrangeBasis) = size(b.points)
 Base.getindex(b::LagrangeBasis, i::Int) = LagrangeFun(b.points, i)
 points(b::LagrangeBasis) = b.points
-@generated weights(b::LagrangeBasis{T, LobattoPoints{T, N}}) where {T, N}
-    return :($(SVector{N, T}(gausslobatto(N)[2])))
-end
 #Base.Broadcast.broadcastable(b::LagrangeBasis) = SArray{Tuple{size(b)...}}(b) #TODO generalize to non-static children
 
 #A vector representing Lobatto Points
@@ -155,71 +172,60 @@ end
 LobattoPoints(n) = LobattoPoints{Float64, n + 1}()
 #Base.Broadcast.broadcastable(p::LobattoPoints) = SArray{Tuple{size(p)...}}(p)
 
-#A vector-valued function composed of one-dimensional functions
-struct VectorFun{T, N, F <: Tuple{Vararg{Fun{<:Any, 1}, N}}} <: Fun{SVector{N, T}, N}
-    funs::F
-    VectorFun(x::Fun{<:T, 1}...) where {T} = new{T, length(x), typeof(x)}(x)
-end
-
-(f::VectorFun)(x...) = apply(f, SVector(x...))
-function apply(f::VectorFun{T, N}, x::AbstractVector) where {T, N}
-    apply.(SVector(f.funs), SVector.(x))
-end
-
 function MultilinearFun(x₀, x₁, y₀, y₁)
     x₀, x₁, y₀, y₁ = (SVector(x₀), SVector(x₁), SVector(y₀), SVector(y₁))
-    VectorFun(Tuple(ComboFun.(LagrangeBasis.(SVector.(x₀, x₁)), SVector.(y₀, y₁)))...)
+    #println(ProductBasis(LagrangeBasis.(SVector.(x₀, x₁))...))
+    #this is broken.
+    ComboFun(ProductBasis(LagrangeBasis.(SVector.(x₀, x₁))...), collect(product(SVector.(y₀, y₁)...)))
 end
 
-∫_Ω(f::ComboFun) = sum(∫_Ω.(f.basis) .* f.coeffs)
+∫(f::ComboFun) = sum(∫.(f.basis) .* f.coeffs)
 
-∫_Ω(f::ProductFun) = prod(∫_Ω.(f.funs)...)
+∫(f::ProductFun) = prod(∫.(f.funs)...)
 
-∫_Ω(f::LagrangeFun) = lagrange_weights(f.points)[f.n]
-
-function Base.map(::typeof(∫_Ω), b::LagrangeBasis)
-    lagrange_weights(b.points)
+@generated function ∫(f::LagrangeFun{T, <:LobattoPoints{T, N}}) where {T, N}
+    return :($(SVector{N, T}(gausslobatto(N)[2]))[f.n])
 end
 
-function ∫_Ω(f::ComboFun{T, N, B<:ProductBasis{T, N}}) where {T, N, B}
-    t = map(basis -> map(∫_Ω, basis), f.basis.bases) #these are actually the weights
+@generated function Base.map(::typeof(∫), b::LagrangeBasis{T, <:LobattoPoints{T, N}}) where {T, N}
+    return :($(SVector{N, T}(gausslobatto(N)[2])))
+end
+
+function ∫(f::ComboFun{T, N, <:ProductBasis{T, N}}) where {T, N}
+    t = map(basis -> map(∫, basis), f.basis.bases) #these are actually the weights
     sum(prod.(collect(product(t...))) .* f.coeffs)
 end
 
-∇(f::ComboFun) = sum(∇(b) * c for (b, c) in zip(f.basis, f.coeff))
+∇(f::ComboFun) = sum(∇(b) * c for (b, c) in zip(f.basis, f.coeffs))
 
-∇(f::LagrangeFun) = ComboFun(spectralderivative(f.points)[:#=?=#, f.n], LagrangeBasis(f.points))
+∇(f::ComboFun{<:Any, <:Any, <:LagrangeBasis{<:Any, <:SVector{2}}}) = (f.coeffs[2] - f.coeffs[1])/(f.basis.points[2] - f.basis.points[1])
 
-∇(f::LagrangeBasis) = [ComboFun(spectralderivative(b.points)[:#=?=#, n], LagrangeBasis(b.points)) for n in eachindex(points)]
+∇(f::LagrangeFun) = ComboFun(spectralderivative(f.points)[:#=?=#, f.n], LagrangeBasis(f.points)) #TODO generate
 
-function ∇(f::ComboFun{<:Any, N, <:ProductBasis{T, N, B<:Tuple{Vararg{<:LagrangeBasis}}}}) where {N}
+∇(b::LagrangeBasis) = [ComboFun(spectralderivative(b.points)[:#=?=#, n], LagrangeBasis(b.points)) for n in eachindex(points)] #TODO generate
+
+function ∇(f::ComboFun{<:Any, N, <:ProductBasis{<:Any, N, <:Tuple{Vararg{<:LagrangeBasis}}}}) where {N} #TODO generate
     things = [mapslices(c-> spectralderivative(b.points) * c, f.coeffs, dims=i) for (i, b) in enumerate(f.basis.bases)]
     ComboFun(SVector.(things...), f.basis)
 end
 
-Typeof(b::Base.Broadcast.Broadcasted{<:Any, <:Any, F}) where {F} = Base.Broadcast.Broadcasted{<:Any, <:Any, F, Tuple{map(Typeof, b.args)...}}
-Typeof(x) = x
-Base.Broadcast.broadcasted(typeof(Typeof), arg) = Typeof(arg)
-
-
-function Base.Broadcast.materialize(r, b::(Typeof.(∫_Ω.(∇.(transpose.(B)), F)))) where {T, N, B<:ProductBasis{T, N, B<:Tuple{Vararg{<:LagrangeBasis}}}, C<:ComboFun{<:Any, N, B}}
-    #                 ∫_Ω.      *.      '.      ∇.
-    basis = materialize(b.args[1].args[1].args[1].args[1])
-    #             ∫_Ω.      *.
-    f = materialize(b.args[1].args[2])
-    ∫_Ω∇⋅(b, f)
-end
-
-function ∫_ΩΨ∇⋅(b::B, f::ComboFun{S, N, B}) where {T, S, N, B<:ProductBasis{T, N}}
-    t = map(basis -> map(∫_Ω, basis), f.basis.bases) #these are actually the weights
+function ∫∇Ψ(f::ComboFun{S, N, B}) where {T, S, N, B<:ProductBasis{T, N}}
+    t = map(basis -> map(∫, basis), f.basis.bases) #these are actually the weights
     ω = prod.(collect(product(t...)))
-    return sum(mapslices(c->D(f.basis.bases[n])' * c, ω.(getindex.(f.coeffs, n)), dims=n) for n in 1:N)
+    return ComboFun(sum(mapslices(c->D(f.basis.bases[n])' * c, ω.(getindex.(f.coeffs, n)), dims=n) for n in 1:N), f.basis.bases)
 end
+
+function ∫Ψ(f::ComboFun)
+    return ComboFun(f.coeffs .* map(∫, f.basis), f.basis)
+end
+
 
 
 
 
 #OVERRIDES
+
+StaticArrays.SVector(i::CartesianIndex) = SVector(Tuple(i))
 
 function Base.collect(it::Base.Iterators.ProductIterator{TT}) where {TT<:Tuple{Vararg{LobattoPoints}}}
     sproduct(it.iterators)
@@ -245,8 +251,6 @@ end
 #1 function to interpolate global coefficients to local -1 to 1 for basis
 #  a) only store scale in type domain
 #  b) store scale and offset
-
-StaticArrays.SVector(i::CartesianIndex) = SVector(Tuple(i))
 
 function Base.collect(it::Base.Iterators.ProductIterator{<:Tuple{Vararg{SArray}}})
     SArray{Tuple{size(it)...},eltype(it),ndims(it),length(it)}(it...)

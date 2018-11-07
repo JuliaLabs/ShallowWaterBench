@@ -48,96 +48,73 @@ X⃗      = map(i -> MultilinearFun(I⃗(i), I⃗(i + Î), -1.0, 1.0), mesh)
 
 # Set initial conditions
 
-approximate(f) = map(i -> approximate(x->f(X⃗[i](x)), Ψ), mesh)
+myapproximate(f) = map(i -> approximate(x->f(X⃗[i](x)), Ψ), mesh)
+myinterpolate(f, x⃗) = f[I⃗⁻¹(x⃗)](X⃗⁻¹(x⃗))
 
-r          = approximate(x⃗ -> norm(x⃗ - 0.5))
-bathymetry = approximate(x⃗ -> eltype(x⃗) * 0.2)
-h          = approximate(x⃗ -> 0.5 * exp(-100.0 * r(x⃗)))
-U⃗          = approximate(x⃗ -> zero(x⃗))
+r          = myapproximate(x⃗ -> norm(x⃗ - 0.5))
+bathymetry = myapproximate(x⃗ -> 0.2)
+h          = myapproximate(x⃗ -> 0.5 * exp(-100.0 * norm(x⃗ - 0.5)))
+U⃗          = myapproximate(x⃗ -> zero(x⃗))
 dX⃗         = ∇(X⃗⁻¹[1])
 J          = det(dX⃗)
+sJ         = det(∇(X⃗⁻¹[1][face]))
 
 dt = 0.0025
 nsteps = ceil(Int64, tend / dt)
 dt = tend / nsteps
 
-overelems(mesh) do elem, mesh
+overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
     #function volumerhs!(rhs, Q::NamedTuple{S, NTuple{3, T}}, bathymetry, metric, D, ω, elems, gravity, δnl) where {S, T}
-    ht    = h[elem] + bathymetry[elem]
-    u⃗     = U⃗[elem] / ht
-    fluxh = U⃗[elem]
-    Δh    = ComboFun(∫_Ω.(dot.(∇.(Ψ), dX⃗ * fluxh * J)), Ψ)
-    fluxU⃗ = ((u⃗ * u⃗' * ht) + I * 0.5 * gravity * hs^2) * δnl + I * gravity * h[elem] * bathymetry[elem]
-    ΔU⃗    = ComboFun(∫_Ω.(dot.(∇.(Ψ), dX⃗ * fluxU⃗ * J)), Ψ)
+    ht         = h[elem] + bathymetry[elem]
+    u⃗          = U⃗[elem] / ht
+    fluxh      = U⃗[elem]
+    Δh[elem]  += ∫∇Ψ(dX⃗ * fluxh * J)
+    fluxU⃗      = (u⃗ * u⃗' * ht) + I * gravity * (0.5 * hs^2 + h[elem] * bathymetry[elem])
+    ΔU⃗[elem]  += ∫∇Ψ(dX⃗ * fluxU⃗ * J)
 end
 
-#↑ this stuff works
-#↓ this stuff doesn't
-#=
+#Note: try out ⋅
 
-ht = h .+ bathymetry
-#function volumerhs!(rhs, Q::NamedTuple{S, NTuple{3, T}}, bathymetry, metric, D, ω, elems, gravity, δnl) where {S, T}
-overelems(mesh) do elem
-    J = jacobian(X⃗[elem]) #?
+overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
+    myΔh = ComboFun(MArray(Δh[elem].coeffs), Δh.basis)
+    myΔU⃗ = ComboFun(MArray(ΔU⃗[elem].coeffs), ΔU⃗.basis)
+    for face in faces(elem)
+        elem′ = neighbor(elem, face)
 
-    J = norm(ξ⃗[elem]) #?
+        hs = h[elem][face]
+        hb = bathymetry[elem][face]
 
+        ht        = hs + hb
+        u⃗         = U⃗[elem][face] / ht
+        fluxh     = U⃗[elem][face]
+        fluxU⃗     = (u⃗ * u⃗' * ht) + I * gravity * (0.5 * hs^2 + hs * hb)
+        λ         = abs(dot(normal(face), u⃗)) + sqrt(gravity * hs)
+
+        ht′        = hs′ + hb′
+        u⃗′         = U⃗[elem′][opposite(face)] / ht′
+        fluxh′     = U⃗[elem′][opposite(face)]
+        fluxU⃗′     = (u⃗′ * u⃗′' * ht′) + I * gravity * (0.5 * hs′^2 + hs′ * hb′)
+        λ′         = abs(dot(normal(face) * -1, u⃗′)) + sqrt(gravity * hs′)
+
+        myΔh[face] -= ∫Ψ((normal(face)*(fluxh + fluxh′) - (max( λ, λ′ ) * (hs′ - hs)) / 2) * sJ)
+        myΔU⃗[face] -= ∫Ψ((normal(face)*(fluxU⃗ + fluxU⃗′) - (max( λ, λ′ ) * (U⃗′ - U⃗)) / 2) * sJ)
+    end
+    Δh[elem] = ComboFun(SArray(myΔh.coeffs), myΔh.basis)
+    ΔU⃗[elem] = ComboFun(SArray(myΔU⃗.coeffs), myΔU⃗.basis)
+end
+
+overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
     ht = h[elem] + bathymetry[elem]
-    u⃗ = U⃗[elem]/ht
-    fluxh⃗ = U⃗[elem]
-    fluxU⃗ = U⃗[elem] * U⃗[elem]'/ht + I * 0.5g * h[elem]^2 * δnl + I*gravity * h[e] * bathymetry[e]
+    u = U⃗[elem] ./ ht
 
-
-
-    Δh[e] = ∫∇Ψ(fluxh⃗[e], d(X⃗[e]))
-    Δh[e] = ∫∇Ψ(fluxh⃗[e], I)
-
-#    ΔU⃗ = ∫∇Ψ(fluxU⃗)
-
-    function ∫∇(f::ComboFun{B::Basis, C}, J) where {B, C}
-        coeffs = sum(integral(gradient(Psi_i ).*psij) * J)
-        return ComboFun(f.basis, 
-
-        for Ψ₁, c in zip(f.basis, f.coeffs)
-          for Ψ₂ in f.basis
-            res += ?fun fun2
-
-        ω = weights(f.basis)
-
-        
-
-        # loop of ξ-grid lines
-        for j = 1:Nq
-            rhsh[:,j,e] += D' * (ω[j] * ω .* J[:,j,e].* (ξx[:,j,e] .* fluxh[1,:,j] + ξy[:,j,e] .* fluxh[2,:,j]))
-            rhsU[:,j,e] += D' * (ω[j] * ω .* J[:,j,e].* (ξx[:,j,e] .* fluxU[1,:,j] + ξy[:,j,e] .* fluxU[2,:,j]))
-            rhsV[:,j,e] += D' * (ω[j] * ω .* J[:,j,e].* (ξx[:,j,e] .* fluxV[1,:,j] + ξy[:,j,e] .* fluxV[2,:,j]))
-        end #j
-        # loop of η-grid lines
-        for i = 1:Nq
-            rhsh[i,:,e] += D' * (ω[i] * ω .* J[i,:,e].* (ηx[i,:,e] .* fluxh[1,i,:] + ηy[i,:,e] .* fluxh[2,i,:]))
-            rhsU[i,:,e] += D' * (ω[i] * ω .* J[i,:,e].* (ηx[i,:,e] .* fluxU[1,i,:] + ηy[i,:,e] .* fluxU[2,i,:]))
-            rhsV[i,:,e] += D' * (ω[i] * ω .* J[i,:,e].* (ηx[i,:,e] .* fluxV[1,i,:] + ηy[i,:,e] .* fluxV[2,i,:]))
-        end #i
+    M = ∫Ψ(approximate(x⃗ -> J, Ψ))
+    for e ∈ elems
+        h[elem] += rkb * dt * Δh[elem] / M
+        U⃗[elem] += rkb * dt * ΔU⃗[elem] / M
+        Δh[elem] *= rka
+        ΔU⃗[elem] *= rka
     end
 
+    U⃗[elem] = (h[elem]+bathymetry) * u⃗
+end
 
-    J*fluxh⃗ == (ξx[:,j,e] .* fluxh[1,:,j] + ξy[:,j,e] .* fluxh[2,:,j])
-    
-end #e ∈ elems
-
-#rhsh = zero.(Qh)
-#rhsU⃗ = zero.(QU⃗)
-#if (advection)
-#    δnl=1.0
-#    gravity=0.0
-#    if dim == 1
-#        QU⃗ = Qh .+ bathymetry
-#    elseif dim == 2
-#        QU⃗ = Qh .+ (bathymetry.*Ref([1.0, 0.0]))
-#    end
-#end
-
-#plot h now
-
-#we can get the value of h at some position x⃗ by calling h[I⃗⁻¹(x⃗)](X⃗⁻¹(x⃗))
-=#
