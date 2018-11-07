@@ -36,6 +36,10 @@ abstract type Basis{T, N, F<:Fun{T, N}} <: AbstractArray{F, N} end
 struct ComboFun{T, N, B<:Basis{<:Any, N}, C<:AbstractArray{T}} <: Fun{T, N}
     basis::B
     coeffs::C
+    function ComboFun(basis::B, coeffs::C) where {T, N, B<:Basis{<:Any, N}, C<:AbstractArray{T}}
+        @assert length(basis) == length(coeffs)
+        new{T, N, B, C}(basis, coeffs)
+    end
 end
 
 (f::ComboFun)(x...) = apply(f, SVector(x...))
@@ -126,7 +130,10 @@ struct ProductBasis{T, N, B <: Tuple{Vararg{OrthoBasis{T, 1}, N}}} <: OrthoBasis
 end
 Base.size(b::ProductBasis) = map(length, b.bases)
 Base.eltype(b::ProductBasis{T, N}) where {T, N} = ProductFun{T, N, Tuple{map(eltype, b.bases)...}}
-Base.getindex(b::ProductBasis, i::Int...)::eltype(b) = ProductFun(map(getindex, b.bases, i)...)
+function Base.getindex(b::ProductBasis, i::Int...)::eltype(b) 
+    ind = Tuple(CartesianIndices(b)[i...])
+    ProductFun(map((b,i)->getindex(b, i...), b.bases, ind)...)
+end
 points(b::ProductBasis) = collect(product(map(points, b.bases)...))
 #Base.Broadcast.broadcastable(b::ProductBasis) = SArray{Tuple{size(b)...}}(b) #TODO generalize to non-static children
 
