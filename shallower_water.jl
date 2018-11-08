@@ -112,18 +112,21 @@ overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, 
     ΔU⃗[elem] = ComboFun(myΔU⃗.basis, SArray(myΔU⃗.coeffs))
 end
 
+const rkb = 1.0
+const rka = 1.0
+const dt = 1.0
 overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
     ht = h[elem] + bathymetry[elem]
-    u = U⃗[elem] ./ ht
+    u⃗ = U⃗[elem] / ht
 
     M = ∫Ψ(approximate(x⃗ -> J, Ψ))
-    for e ∈ elems
+    for e ∈  neighbors(elem, mesh)
         h[elem] += rkb * dt * Δh[elem] / M
         U⃗[elem] += rkb * dt * ΔU⃗[elem] / M
         Δh[elem] *= rka
         ΔU⃗[elem] *= rka
     end
 
-    U⃗[elem] = (h[elem]+bathymetry) * u⃗
+    U⃗[elem] = (h[elem]+bathymetry[elem]) * u⃗
 end
 
