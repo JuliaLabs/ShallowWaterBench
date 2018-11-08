@@ -54,22 +54,6 @@ function apply(f::ComboFun, x::AbstractVector)
     return y
 end
 
-Base.Broadcast.broadcastable(c::ComboFun{T,N}) where {T,N} = c
-Base.Broadcast.broadcast_axes(c::ComboFun{T,N}) where {T,N} = axes(c.coeffs)
-
-struct ComboFunBStyle <: Base.BroadcastStyle end
-Base.BroadcastStyle(::Type{<:ComboFun}) = ComboFunBStyle()
-
-function Base.copy(b::Base.Broadcast.Broadcasted{<:ComboFunBStyle})
-    bc = Base.Broadcast.flatten(b)
-    # TODO broadcast == over Bases
-    bcoeffs = Base.copy(
-        Base.Broadcast.Broadcasted(
-           bc.f, map(x->x.coeffs, bc.args), bc.axes))
-
-    ComboFun(bc.args[1].basis, bcoeffs)
-end
-
 #A basis corresponding to a set of points, where the basis function i is one(T) at point i and zero(T) everywhere else
 abstract type OrthoBasis{T, N, F} <: Basis{T, N, F} end
 points(::OrthoBasis) = error("Subtypes of OrthoBasis must define the points function")
