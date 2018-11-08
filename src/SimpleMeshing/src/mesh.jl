@@ -1,6 +1,6 @@
 module Meshing
     export Mesh, CartesianMesh, PeriodicCartesianMesh, GhostCartesianMesh, CPU
-    export faces, neighbor, neighbors, overelems, storage, elems
+    export faces, neighbor, opposite, neighbors, overelems, storage, elems
     export ghostboundaries, boundaries, backend, translate
 
 using Base.Cartesian
@@ -45,6 +45,11 @@ faces(elem, mesh::Mesh)  = throw(MethodError(faces, (typeof(elem), typeof(mesh))
     neighbor(elem, face, mesh::Mesh)
 """
 neighbor(elem, face, mesh::Mesh) = throw(MethodError(neighbor, (typeof(elem), typeof(face), typeof(mesh))))
+
+"""
+    opposite(face, elem, mesh::Mesh)
+"""
+opposite(face, elem, mesh::Mesh) = throw(MethodError(opposite, (typeof(face), typeof(elem), typeof(mesh))))
 
 """
     neighbors(elem, mesh::Mesh)
@@ -122,6 +127,8 @@ elems(mesh::PeriodicCartesianMesh) = mesh.inds
 
 Base.mod(x::T, y::AbstractUnitRange{T}) where {T<:Integer} = y[mod1(x - y[1] + 1, length(y))]
 Base.mod(x::CartesianIndex{N}, y::CartesianIndices{N}) where {N} = CartesianIndex(ntuple(n->mod(x[n], axes(y)[n]), N))
+
+opposite(face, elem, mesh::PeriodicCartesianMesh) = -face
 
 neighbor(elem, face, mesh::PeriodicCartesianMesh) =
     (elem + face) in mesh.inds ? elem + face : mod(elem + face, mesh.inds)

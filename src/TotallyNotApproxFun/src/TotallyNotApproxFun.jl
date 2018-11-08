@@ -8,6 +8,7 @@ using Canary
 export Fun, ComboFun, approximate, ProductFun, LagrangeFun, VectorFun, MultilinearFun
 export Basis, OrthoBasis, ProductBasis, LagrangeBasis
 export points, LobattoPoints
+export normal
 export ∇, ∫, ∫Ψ, ∫∇Ψ
 
 #A representation of a T-valued function in an N-Dimensional space.
@@ -59,14 +60,14 @@ abstract type OrthoBasis{T, N, F} <: Basis{T, N, F} end
 points(::OrthoBasis) = error("Subtypes of OrthoBasis must define the points function")
 approximate(f, b::OrthoBasis) = ComboFun(b, map(f, points(b)))
 
-for op in (:(Base.:+), :(Base.:-), :(Base.zero), :(LinearAlgebra.transpose), :(LinearAlgebra.adjoint), :(LinearAlgebra.norm), :(Base.:exp))
+for op in (:(Base.:+), :(Base.:-), :(Base.zero), :(LinearAlgebra.transpose), :(LinearAlgebra.adjoint), :(LinearAlgebra.norm), :(Base.exp), :(Base.sqrt), :(Base.abs))
     @eval begin
         function $(op)(a::ComboFun{T, N, B}) where {T, N, B <: OrthoBasis}
             ComboFun(a.basis, map($op, a.coeffs))
         end
     end
 end
-for op in (:(Base.:+), :(Base.:-), :(Base.:*), :(Base.:/), :(Base.:exp), :(Base.:^))
+for op in (:(Base.:+), :(Base.:-), :(Base.:*), :(Base.:/), :(Base.exp), :(Base.:^), :(Base.max))
     @eval begin
         function $op(a::ComboFun{T, N, B}, b::ComboFun{S, N, B}) where {T, S, N, B <: OrthoBasis}
             @assert a.basis == b.basis
@@ -136,6 +137,33 @@ function Base.getindex(b::ProductBasis, i::Int...)::eltype(b)
 end
 points(b::ProductBasis) = SVector.(collect(product(map(points, b.bases)...)))
 #Base.Broadcast.broadcastable(b::ProductBasis) = SArray{Tuple{size(b)...}}(b) #TODO generalize to non-static children
+
+#
+# BEGIN TODO
+#
+# In the future, these functions should be replaced with functions that operate on a "shape" class
+#
+function Base.getindex(f::ComboFun{<:Any, N, <:ProductBasis}, I::CartesianIndex{N}) where {N}
+    I = Tuple(I)
+    return ComboFun(ProductBasis(f.basis.bases[findall(isequal(0), I)]...),
+                    f.coeffs[map(n -> I[n] ==  1 ? lastindex(f.coeffs, n) :
+                                      I[n] == -1 ? 1                      :
+                                                   Colon()                , 1:N)...])
+end
+
+function Base.setindex(f::ComboFun{<:Any, N, <:ProductBasis}, g::ComboFun{<:Any, M, <:ProductBasis}, I::CartesianIndex{N}) where {N, M}
+    I = Tuple(I)
+    @assert ProductBasis(f.basis.bases[findall(isequal(0), I)]...) == g.basis
+    f.coeffs[map(n -> I[n] ==  1 ? lastindex(f.coeffs, n) :
+                                          I[n] == -1 ? 1                      :
+                                                       Colon()                , 1:N)...] = g.coeffs
+end
+
+normal(face::CartesianIndex) = SVector(face)
+
+#
+# END TODO
+#
 
 #The minimum-degree polynomial function which is 1 at the nth point and 0 at the other points
 struct LagrangeFun{T, P <: AbstractVector{T}} <: Fun{T, 1}
