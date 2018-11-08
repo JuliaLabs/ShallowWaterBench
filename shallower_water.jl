@@ -55,13 +55,15 @@ r          = myapproximate(x⃗ -> norm(x⃗ - 0.5))
 bathymetry = myapproximate(x⃗ -> 0.2)
 h          = myapproximate(x⃗ -> 0.5 * exp(-100.0 * norm(x⃗ - 0.5)))
 U⃗          = myapproximate(x⃗ -> zero(x⃗))
-dX⃗         = ∇(X⃗⁻¹[1])
+Δh         = myapproximate(x⃗ -> zero(eltype(x⃗)))
+ΔU⃗         = myapproximate(x⃗ -> zero(x⃗))
+dX⃗         = ∇(X⃗⁻¹[1])(zero(Î))
 J          = det(dX⃗)
-sJ         = det(∇(X⃗⁻¹[1][face]))
+#sJ         = det(∇(X⃗⁻¹[1][face]))
 
-dt = 0.0025
-nsteps = ceil(Int64, tend / dt)
-dt = tend / nsteps
+#dt = 0.0025
+#nsteps = ceil(Int64, tend / dt)
+#dt = tend / nsteps
 
 overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
     #function volumerhs!(rhs, Q::NamedTuple{S, NTuple{3, T}}, bathymetry, metric, D, ω, elems, gravity, δnl) where {S, T}

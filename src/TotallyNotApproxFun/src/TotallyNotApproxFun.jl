@@ -1,6 +1,5 @@
 module TotallyNotApproxFun
 
-using FastGaussQuadrature
 using StaticArrays
 using Base.Iterators
 using LinearAlgebra
@@ -73,13 +72,13 @@ for op in (:(Base.:+), :(Base.:-), :(Base.:*), :(Base.:/), :(Base.:exp), :(Base.
             ComboFun(a.basis, $op.(a.coeffs, b.coeffs))
         end
         function $op(a::ComboFun{T, N, B}, b) where {T, N, B <: OrthoBasis}
-            ComboFun(a.basis, $op.(a.coeffs, b))
+            ComboFun(a.basis, $op.(a.coeffs, Ref(b)))
         end
         function $op(a::ComboFun{T, N, B}, b::Fun) where {T, N, B <: OrthoBasis}
             throw(NotImplementedError())
         end
         function $op(a, b::ComboFun{T, N, B}) where {T, N, B <: OrthoBasis}
-            ComboFun(b.basis, $op.(a, b.coeffs))
+            ComboFun(b.basis, $op.(Ref(a), b.coeffs))
         end
         function $op(a::Fun, b::ComboFun{T, N, B}) where {T, N, B <: OrthoBasis}
             throw(NotImplementedError())
@@ -130,7 +129,7 @@ struct ProductBasis{T, N, B <: Tuple{Vararg{OrthoBasis{T, 1}, N}}} <: OrthoBasis
 end
 Base.size(b::ProductBasis) = map(length, b.bases)
 Base.eltype(b::ProductBasis{T, N}) where {T, N} = ProductFun{T, N, Tuple{map(eltype, b.bases)...}}
-function Base.getindex(b::ProductBasis, i::Int...)::eltype(b) 
+function Base.getindex(b::ProductBasis, i::Int...)::eltype(b)
     ind = Tuple(CartesianIndices(b)[i...])
     ProductFun(map((b,i)->getindex(b, i...), b.bases, ind)...)
 end
@@ -174,7 +173,7 @@ struct LobattoPoints{T, N} <: AbstractVector{T} end
 
 Base.size(p::LobattoPoints{T, N}) where {T, N} = (N,)
 @generated function Base.getindex(p::LobattoPoints{T, N}, i::Int) where {T, N}
-    return :($(SVector{N, T}(gausslobatto(N)[1]))[i])
+    return :($(SVector{N, T}(lglpoints(T, N)[1]))[i])
 end
 LobattoPoints(n) = LobattoPoints{Float64, n + 1}()
 #Base.Broadcast.broadcastable(p::LobattoPoints) = SArray{Tuple{size(p)...}}(p)
@@ -184,40 +183,58 @@ function MultilinearFun(x₀, x₁, y₀, y₁)
     ComboFun(ProductBasis(LagrangeBasis.(SVector.(x₀, x₁))...), SVector.(collect(product(SVector.(y₀, y₁)...))))
 end
 
-∫(f::ComboFun) = sum(∫.(f.basis) .* f.coeffs)
+@generated function Base.map(::typeof(∫), b::LagrangeBasis{T, <:LobattoPoints{T, N}}) where {T, N}
+    return :($(SVector{N, T}(lglpoints(T, N)[2])))
+end
 
-∫(f::ProductFun) = prod(∫.(f.funs)...)
+function Base.map(::typeof(∫), b::ProductBasis{T, N}) where {T, N}
+    return prod.(collect(product((map(∫, basis) for basis in b.bases)...)))
+end
 
 @generated function ∫(f::LagrangeFun{T, <:LobattoPoints{T, N}}) where {T, N}
-    return :($(SVector{N, T}(gausslobatto(N)[2]))[f.n])
+    return :($(SVector{N, T}(lglpoints(T, N)[2]))[f.n])
 end
 
-@generated function Base.map(::typeof(∫), b::LagrangeBasis{T, <:LobattoPoints{T, N}}) where {T, N}
-    return :($(SVector{N, T}(gausslobatto(N)[2])))
+∫(f::ComboFun) = sum(map(∫, f.basis) .* f.coeffs)
+
+∫(f::ProductFun) = prod(map(∫, f.funs))
+
+∇(f::ComboFun) = sum(map(∇, f.basis) .* f)
+
+@generated function ∇(f::LagrangeFun{T, <:LobattoPoints{T, N}}) where {T, N}
+    return :(ComboFun(LagrangeBasis(LobattoPoints{T, N}()), $(SMatrix{N, T}(spectralderivative(lglpoints(T, N)[1])))[:, f.n]))
 end
 
-function ∫(f::ComboFun{T, N, <:ProductBasis{T, N}}) where {T, N}
-    t = map(basis -> map(∫, basis), f.basis.bases) #these are actually the weights
-    sum(prod.(collect(product(t...))) .* f.coeffs)
+function ∇(f::ComboFun{<:Any, N, <:LagrangeBasis{<:Any, <:LobattoPoints{T, N}}}) where {T, N} #TODO generate
+    return :(ComboFun(f.basis, $(SMatrix{N, T}(spectralderivative(lglpoints(T, N)[1]))) * f.coeffs))
 end
 
-∇(f::ComboFun) = sum(∇(b) * c for (b, c) in zip(f.basis, f.coeffs))
+function ∇(f::ComboFun{T, N, <:LagrangeBasis{T, N}}) where {T, N}
+    partials = [mapslices(c-> ∇(ComboFun(b, c)).coeffs, f.coeffs, dims=i) for (i, b) in enumerate(f.basis.bases)]
+    ComboFun(f.basis, cat.(partials..., dims = ndims(T) + 1))
+end
 
+#=
 ∇(f::ComboFun{<:Any, <:Any, <:LagrangeBasis{<:Any, <:SVector{2}}}) = (f.coeffs[2] - f.coeffs[1])/(f.basis.points[2] - f.basis.points[1])
 
-∇(f::LagrangeFun) = ComboFun(spectralderivative(f.points)[:#=?=#, f.n], LagrangeBasis(f.points)) #TODO generate
+∇(f::lagrangefun) = combofun(transpose(spectralderivative(f.points)[:#=?=#, f.n]), lagrangebasis(f.points)) #todo generate
 
-∇(b::LagrangeBasis) = [ComboFun(spectralderivative(b.points)[:#=?=#, n], LagrangeBasis(b.points)) for n in eachindex(points)] #TODO generate
+function ∇(f::ComboFun{T, N, <:ProductBasis{<:Any, N, <:Tuple{Vararg{<:LagrangeBasis{<:Any, <:SVector{2}}}}}}) where {T, N} #TODO generate
+    things = [mapslices(c-> (x = (c[2] - c[1])/(b.points[2] - b.points[1]); SVector(x, x)), f.coeffs, dims=i) for (i, b) in enumerate(f.basis.bases)]
+    ComboFun(f.basis, cat.(things..., dims = ndims(T) + 1))
+end
+=#
 
+#=
 function ∇(f::ComboFun{<:Any, N, <:ProductBasis{<:Any, N, <:Tuple{Vararg{<:LagrangeBasis}}}}) where {N} #TODO generate
     things = [mapslices(c-> spectralderivative(b.points) * c, f.coeffs, dims=i) for (i, b) in enumerate(f.basis.bases)]
     ComboFun(SVector.(things...), f.basis)
 end
+=#
 
 function ∫∇Ψ(f::ComboFun{S, N, B}) where {T, S, N, B<:ProductBasis{T, N}}
-    t = map(basis -> map(∫, basis), f.basis.bases) #these are actually the weights
-    ω = prod.(collect(product(t...)))
-    return ComboFun(sum(mapslices(c->D(f.basis.bases[n])' * c, ω.(getindex.(f.coeffs, n)), dims=n) for n in 1:N), f.basis.bases)
+    ω = map(∫, f.basis)
+    return ComboFun(sum(mapslices(c->D(f.basis.bases[n])' * c, ω.*(getindex.(f.coeffs, n)), dims=n) for n in 1:N), f.basis.bases)
 end
 
 function ∫Ψ(f::ComboFun)
@@ -257,12 +274,12 @@ end
 #  a) only store scale in type domain
 #  b) store scale and offset
 
-function Base.collect(it::Base.Iterators.ProductIterator{<:Tuple{Vararg{SArray}}})
-    SArray{Tuple{size(it)...},eltype(it),ndims(it),length(it)}(it...)
-end
+#function Base.collect(it::Base.Iterators.ProductIterator{<:Tuple{Vararg{SArray}}})
+#    SArray{Tuple{size(it)...},eltype(it),ndims(it),length(it)}(it...)
+#end
 
-function Base.collect(it::Base.Iterators.ProductIterator{<:Tuple{Vararg{LobattoPoints}}})
-    SArray{Tuple{size(it)...},eltype(it),ndims(it),length(it)}(it...)
-end
+#function Base.collect(it::Base.Iterators.ProductIterator{<:Tuple{Vararg{LobattoPoints}}})
+#    SArray{Tuple{size(it)...},eltype(it),ndims(it),length(it)}(it...)
+#end
 
 end
