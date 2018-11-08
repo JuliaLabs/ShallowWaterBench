@@ -29,14 +29,14 @@ function main(;backend=backend)
     X⃗₁ = SVector(123.0, 100.0)
     I⃗₀ = first(elems(mesh))
     I⃗₁ = last(elems(mesh))
-    const Î = one(I⃗₀)
+    Î = one(I⃗₀)
 
     # I⃗⁻¹      is a function which maps indices to coordinates
     # I⃗        is a function which maps coordinates to indicies
     # X⃗⁻¹[i]   is a function which maps element coordinates (-1.0 to 1.0) to coordinates
     # X⃗[i] is a function which maps coordinates to element coordinates (-1.0 to 1.0)
 
-    const I⃗⁻¹      = MultilinearFun(I⃗₀, I⃗₁, X⃗₀, X⃗₁)
+    I⃗⁻¹      = MultilinearFun(I⃗₀, I⃗₁, X⃗₀, X⃗₁)
     I⃗(x⃗)    = CartesianIndex(floor.(Int, MultilinearFun(X⃗₀, X⃗₁, I⃗₀, I⃗₁)(x⃗))...)
     # test all(I == I⃗⁻¹(I⃗(I)) for I in elems(mesh))
     # Due to floating-point imprecisions that does not hold exactly everywhere
@@ -113,9 +113,9 @@ function main(;backend=backend)
         ΔU⃗[elem] = ComboFun(myΔU⃗.basis, SArray(myΔU⃗.coeffs))
     end
 
-    const rkb = 1.0
-    const rka = 1.0
-    const dt = 1.0
+    rkb = 1.0
+    rka = 1.0
+    dt = 1.0
     overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
         ht = h[elem] + bathymetry[elem]
         u⃗ = U⃗[elem] / ht
