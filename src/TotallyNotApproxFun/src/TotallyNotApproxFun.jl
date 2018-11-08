@@ -244,7 +244,7 @@ function ∫∇Ψ(f::ComboFun{<:Any, N, <:ProductBasis{<:Any, N, <:Tuple{Vararg{
 end
 
 function ∫Ψ(f::ComboFun)
-    return ComboFun(f.coeffs .* map(∫, f.basis), f.basis)
+    return ComboFun(f.basis, f.coeffs .* map(∫, f.basis))
 end
 
 #OVERRIDES
