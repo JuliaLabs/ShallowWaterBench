@@ -19,6 +19,14 @@ git-tree-sha1 = "9930c1a6cd49d9fcd7218df6be417e6ae4f1468a"
 uuid = "b99e7846-7c00-51b0-8f62-c81ae34c0232"
 version = "0.5.2"
 
+[[Canary]]
+deps = ["MPI"]
+git-tree-sha1 = "ae0d5c23e2dbca710e197e71cf5a3f6d3805c469"
+repo-rev = "master"
+repo-url = "https://github.com/climate-machine/Canary.jl"
+uuid = "f104530e-ab06-11e8-1c1e-6d6e4a5d5c91"
+version = "0.1.0"
+
 [[Compat]]
 deps = ["Base64", "Dates", "DelimitedFiles", "Distributed", "InteractiveUtils", "LibGit2", "Libdl", "LinearAlgebra", "Markdown", "Mmap", "Pkg", "Printf", "REPL", "Random", "Serialization", "SharedArrays", "Sockets", "SparseArrays", "Statistics", "Test", "UUIDs", "Unicode"]
 git-tree-sha1 = "2d9e14d19bad3f9ad5cc5e4cffabc3cfa59de825"
@@ -157,7 +165,7 @@ uuid = "30578b45-9adc-5946-b283-645ec420af67"
 version = "0.4.0"
 
 [[UUIDs]]
-deps = ["Random", "SHA"]
+deps = ["Random"]
 uuid = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 
 [[Unicode]]

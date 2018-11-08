@@ -55,13 +55,16 @@ r          = myapproximate(x⃗ -> norm(x⃗ - 0.5))
 bathymetry = myapproximate(x⃗ -> 0.2)
 h          = myapproximate(x⃗ -> 0.5 * exp(-100.0 * norm(x⃗ - 0.5)))
 U⃗          = myapproximate(x⃗ -> zero(x⃗))
-dX⃗         = ∇(X⃗⁻¹[1])
+Δh         = myapproximate(x⃗ -> zero(eltype(x⃗)))
+ΔU⃗         = myapproximate(x⃗ -> zero(x⃗))
+dX⃗         = ∇(X⃗⁻¹[1])(zero(Î))
 J          = det(dX⃗)
-sJ         = det(∇(X⃗⁻¹[1][face]))
+gravity    = 10.0
+#sJ         = det(∇(X⃗⁻¹[1][face]))
 
-dt = 0.0025
-nsteps = ceil(Int64, tend / dt)
-dt = tend / nsteps
+#dt = 0.0025
+#nsteps = ceil(Int64, tend / dt)
+#dt = tend / nsteps
 
 overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
     #function volumerhs!(rhs, Q::NamedTuple{S, NTuple{3, T}}, bathymetry, metric, D, ω, elems, gravity, δnl) where {S, T}
@@ -69,15 +72,15 @@ overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, 
     u⃗          = U⃗[elem] / ht
     fluxh      = U⃗[elem]
     Δh[elem]  += ∫∇Ψ(dX⃗ * fluxh * J)
-    fluxU⃗      = (u⃗ * u⃗' * ht) + I * gravity * (0.5 * hs^2 + h[elem] * bathymetry[elem])
+    fluxU⃗      = (u⃗ * u⃗' * ht) + I * gravity * (0.5 * h[elem]^2 + h[elem] * bathymetry[elem])
     ΔU⃗[elem]  += ∫∇Ψ(dX⃗ * fluxU⃗ * J)
 end
 
 #Note: try out ⋅
 
 overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
-    myΔh = ComboFun(MArray(Δh[elem].coeffs), Δh.basis)
-    myΔU⃗ = ComboFun(MArray(ΔU⃗[elem].coeffs), ΔU⃗.basis)
+    myΔh = ComboFun(Δh[elem].basis, MArray(Δh[elem].coeffs))
+    myΔU⃗ = ComboFun(ΔU⃗[elem].basis, MArray(ΔU⃗[elem].coeffs))
     for face in faces(elem)
         elem′ = neighbor(elem, face)
 
@@ -99,8 +102,8 @@ overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, 
         myΔh[face] -= ∫Ψ((normal(face)*(fluxh + fluxh′) - (max( λ, λ′ ) * (hs′ - hs)) / 2) * sJ)
         myΔU⃗[face] -= ∫Ψ((normal(face)*(fluxU⃗ + fluxU⃗′) - (max( λ, λ′ ) * (U⃗′ - U⃗)) / 2) * sJ)
     end
-    Δh[elem] = ComboFun(SArray(myΔh.coeffs), myΔh.basis)
-    ΔU⃗[elem] = ComboFun(SArray(myΔU⃗.coeffs), myΔU⃗.basis)
+    Δh[elem] = ComboFun(myΔh.basis, SArray(myΔh.coeffs))
+    ΔU⃗[elem] = ComboFun(myΔU⃗.basis, SArray(myΔU⃗.coeffs))
 end
 
 overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
