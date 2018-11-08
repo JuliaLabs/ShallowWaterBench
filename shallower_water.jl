@@ -76,14 +76,14 @@ overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, 
     ΔU⃗[elem]  += ∫∇Ψ(dX⃗ * fluxU⃗ * J)
 end
 
-#Note: try out ⋅
-
-sJ = det(∇(X⃗[faces(first(elems(mesh)), mesh)]))
+elem₁ = first(elems(mesh))
+faces₁ = faces(elem₁, mesh)
+Jfaces = SVector{length(faces₁)}([norm(∇(X⃗[elem₁][face])(zero(Î))) for face in faces₁])
 
 overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
     myΔh = ComboFun(Δh[elem].basis, MArray(Δh[elem].coeffs))
     myΔU⃗ = ComboFun(ΔU⃗[elem].basis, MArray(ΔU⃗[elem].coeffs))
-    for face in faces(elem, mesh)
+    for (face, Jface) in zip(faces(elem, mesh), Jfaces)
         elem′ = neighbor(elem, face, mesh)
         face′ = opposite(face, elem′, mesh)
 
@@ -105,8 +105,8 @@ overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, 
         fluxU⃗′     = (u⃗′ * u⃗′' * ht′) + I * gravity * (0.5 * hs′^2 + hs′ * hb′)
         λ′         = abs(normal(face′)' * u⃗′) + sqrt(gravity * hs′)
 
-        myΔh[face] -= ∫Ψ((normal(face)'*(fluxh + fluxh′) - (max( λ, λ′ ) * (hs′ - hs)) / 2) * sJ)
-        myΔU⃗[face] -= ∫Ψ((normal(face)'*(fluxU⃗ + fluxU⃗′) - (max( λ, λ′ ) * (U⃗′ - U⃗)) / 2) * sJ)
+        myΔh[face] -= ∫Ψ(((fluxh + fluxh′)' * normal(face) - (max( λ, λ′ ) * (hs′ - hs)) / 2) * Jface)
+        myΔU⃗[face] -= ∫Ψ(((fluxU⃗ + fluxU⃗′)' * normal(face) - (max( λ, λ′ ) * (U⃗[elem′][face′] - U⃗[elem][face])) / 2) * Jface)
     end
     Δh[elem] = ComboFun(myΔh.basis, SArray(myΔh.coeffs))
     ΔU⃗[elem] = ComboFun(myΔU⃗.basis, SArray(myΔU⃗.coeffs))

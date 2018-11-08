@@ -151,7 +151,7 @@ function Base.getindex(f::ComboFun{<:Any, N, <:ProductBasis}, I::CartesianIndex{
                                                    Colon()                , 1:N)...])
 end
 
-function Base.setindex(f::ComboFun{<:Any, N, <:ProductBasis}, g::ComboFun{<:Any, M, <:ProductBasis}, I::CartesianIndex{N}) where {N, M}
+function Base.setindex!(f::ComboFun{<:Any, N, <:ProductBasis}, g::ComboFun{<:Any, M, <:ProductBasis}, I::CartesianIndex{N}) where {N, M}
     I = Tuple(I)
     @assert ProductBasis(f.basis.bases[findall(isequal(0), I)]...) == g.basis
     f.coeffs[map(n -> I[n] ==  1 ? lastindex(f.coeffs, n) :
@@ -272,7 +272,7 @@ function ∫∇Ψ(f::ComboFun{<:Any, N, <:ProductBasis{<:Any, N, <:Tuple{Vararg{
 end
 
 function ∫Ψ(f::ComboFun)
-    return ComboFun(f.coeffs .* map(∫, f.basis), f.basis)
+    return ComboFun(f.basis, f.coeffs .* map(∫, f.basis))
 end
 
 #OVERRIDES

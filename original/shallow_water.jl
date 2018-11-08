@@ -154,6 +154,8 @@ writemesh(@sprintf("SWE%dD_rank_%04d_mesh", dim, mpirank), coord...;
 # This call computes the metric terms of the grid such as $\xi_\mathbf{x}$, $\eta_\mathbf{x}$, $\zeta_\mathbf{x}$ for all spatial dimensions $\mathbf{x}$ depending on the dimension of $dim$.
 metric = computemetric(coord..., D)
 
+println(metric.sJ)
+
 # ### Generate the State Vectors
 # We need to create as many velocity vectors as there are dimensions.
 if dim == 1
