@@ -3,6 +3,7 @@ uuid = "ac408ca2-de02-11e8-2e84-c5797921eb19"
 authors = ["Peter Ahrens <ptrahrens@gmail.com>"]
 
 [deps]
+Canary = "f104530e-ab06-11e8-1c1e-6d6e4a5d5c91"
 FastGaussQuadrature = "442a2c76-b920-505d-bb47-c5924d526838"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
