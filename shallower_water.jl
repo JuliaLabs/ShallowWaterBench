@@ -59,6 +59,7 @@ U⃗          = myapproximate(x⃗ -> zero(x⃗))
 ΔU⃗         = myapproximate(x⃗ -> zero(x⃗))
 dX⃗         = ∇(X⃗⁻¹[1])(zero(Î))
 J          = det(dX⃗)
+gravity    = 10.0
 #sJ         = det(∇(X⃗⁻¹[1][face]))
 
 #dt = 0.0025
@@ -71,7 +72,7 @@ overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, 
     u⃗          = U⃗[elem] / ht
     fluxh      = U⃗[elem]
     Δh[elem]  += ∫∇Ψ(dX⃗ * fluxh * J)
-    fluxU⃗      = (u⃗ * u⃗' * ht) + I * gravity * (0.5 * hs^2 + h[elem] * bathymetry[elem])
+    fluxU⃗      = (u⃗ * u⃗' * ht) + I * gravity * (0.5 * h[elem]^2 + h[elem] * bathymetry[elem])
     ΔU⃗[elem]  += ∫∇Ψ(dX⃗ * fluxU⃗ * J)
 end
 
