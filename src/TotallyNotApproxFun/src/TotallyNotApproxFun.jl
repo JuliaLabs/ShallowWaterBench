@@ -184,6 +184,12 @@ function MultilinearFun(x₀, x₁, y₀, y₁)
     ComboFun(ProductBasis(LagrangeBasis.(SVector.(x₀, x₁))...), SVector.(collect(product(SVector.(y₀, y₁)...))))
 end
 
+D(p) = spectralderivative(p)
+D(p::SVector{N}) where {N} = SMatrix{N, N}(spectralderivative(p))
+@generated function D(p::LobattoPoints{T, N}) where {T, N}
+    return :($(SMatrix{N, N}(spectralderivative(LobattoPoints{T, N}()))))
+end
+
 ∫(f::ComboFun) = sum(map(∫, f.basis) .* f.coeffs)
 
 ∫(f::ProductFun) = prod(map(∫, f.funs))
@@ -200,71 +206,46 @@ end
     return :($(SVector{N, T}(lglpoints(T, N - 1)[2]))[f.n])
 end
 
-
 ∇(f::ComboFun) = sum(map(∇, f.basis) .* f)
 
-@generated function ∇(f::LagrangeFun{T, <:LobattoPoints{T, N}}) where {T, N}
-    return :(ComboFun(LagrangeBasis(LobattoPoints{T, N}()), $(SMatrix{N, T}(spectralderivative(lglpoints(T, N - 1)[1])))[:, f.n]))
-end
-
-@generated function ∇(f::ComboFun{<:Any, 1, <:LagrangeBasis{<:Any, <:LobattoPoints{T, N}}}) where {T, N}
-    return :(ComboFun(f.basis, $(SMatrix{N, T}(spectralderivative(lglpoints(T, N - 1)[1]))) * f.coeffs))
+function ∇(f::LagrangeFun) where {T, N}
+    return ComboFun(f.basis, D(f.points)[:, f.n])
 end
 
 function ∇(f::ComboFun{<:Any, 1, <:LagrangeBasis}) where {T, N}
-    return ComboFun(f.basis, spectralderivative(f.basis.points) * f.coeffs)
+    return ComboFun(f.basis, D(f.basis.points) * f.coeffs)
 end
 
-function ∇(f::ComboFun{<:Any, 1, <:LagrangeBasis{<:Any, <:SVector{T, 2}}}) where {T, N}
+function ∇(f::ComboFun{<:Any, 1, <:LagrangeBasis{<:Any, <:SVector{2}}})
     dx = (f.coeffs[2] - f.coeffs[1]) / (f.basis.points[2] - f.basis.points[1])
     return ComboFun(f.basis, SVector(dx, dx))
 end
 
 function ∇(f::ComboFun{T, N, <:ProductBasis}) where {T, N}
-    partials = [mapslices(c-> ∇(ComboFun(b, c)).coeffs, f.coeffs, dims=i) for (i, b) in enumerate(f.basis.bases)]
+    partials = [mapslices(c-> ∇(ComboFun(b, c)).coeffs, f.coeffs, dims=n) for (n, b) in enumerate(f.basis.bases)]
     ComboFun(f.basis, cat.(partials..., dims = ndims(T) + 1))
 end
 
-#=
-∇(f::ComboFun{<:Any, <:Any, <:LagrangeBasis{<:Any, <:SVector{2}}}) = (f.coeffs[2] - f.coeffs[1])/(f.basis.points[2] - f.basis.points[1])
-
-∇(f::lagrangefun) = combofun(transpose(spectralderivative(f.points)[:#=?=#, f.n]), lagrangebasis(f.points)) #todo generate
-
-function ∇(f::ComboFun{T, N, <:ProductBasis{<:Any, N, <:Tuple{Vararg{<:LagrangeBasis{<:Any, <:SVector{2}}}}}}) where {T, N} #TODO generate
-    things = [mapslices(c-> (x = (c[2] - c[1])/(b.points[2] - b.points[1]); SVector(x, x)), f.coeffs, dims=i) for (i, b) in enumerate(f.basis.bases)]
-    ComboFun(f.basis, cat.(things..., dims = ndims(T) + 1))
+function ∫∇Ψ(f::ComboFun) where {T, N}
+    return ComboFun(f.basis, map(b -> ∫(∇(b)' * f), f.basis))
 end
-=#
 
-#=
-function ∇(f::ComboFun{<:Any, N, <:ProductBasis{<:Any, N, <:Tuple{Vararg{<:LagrangeBasis}}}}) where {N} #TODO generate
-    things = [mapslices(c-> spectralderivative(b.points) * c, f.coeffs, dims=i) for (i, b) in enumerate(f.basis.bases)]
-    ComboFun(SVector.(things...), f.basis)
-end
-=#
-
-function ∫∇Ψ(f::ComboFun{T, N, <:LagrangeBasis}) where {T, N}
-    #?
-    nothing
+function ∫∇Ψ(f::ComboFun{<:Any, 1, <:LagrangeBasis})
+    return ComboFun(f.basis, convert(typeof(f.coeffs), D(f.basis.points)' * (map(∫, f.basis) .* f.coeffs)))
 end
 
 function ∫∇Ψ(f::ComboFun{T, N, <:ProductBasis}) where {T, N}
-    #?
-    nothing
+    return ComboFun(f.basis, sum(mapslices(c->∫∇Ψ(ComboFun(c)).coeffs, getindex.(f.coeffs, n), dims=n) for n in 1:N))
 end
 
-function ∫∇Ψ(f::ComboFun{T, N, <:ProductBasis{<:Any, N, <:Tuple{Vararg{<:LagrangeBasis}}}}) where {T, N}
+function ∫∇Ψ(f::ComboFun{<:Any, N, <:ProductBasis{<:Any, N, <:Tuple{Vararg{<:LagrangeBasis}}}}) where {N}
     ω = map(∫, f.basis)
-    return ComboFun(f.basis, sum(mapslices(c->spectralderivative(f.basis.bases[n].points)' * c, ω.*(getindex.(f.coeffs, n)), dims=n) for n in 1:N))
+    return ComboFun(f.basis, (sum(mapslices(c->D(b.points)' * c, ω.*(getindex.(f.coeffs, n)), dims=n) for (n, b) in enumerate(f.basis.bases))))
 end
 
 function ∫Ψ(f::ComboFun)
     return ComboFun(f.coeffs .* map(∫, f.basis), f.basis)
 end
-
-
-
-
 
 #OVERRIDES
 
@@ -293,16 +274,14 @@ using Base.Cartesian
 end
 =#
 
-#1 function to interpolate global coefficients to local -1 to 1 for basis
-#  a) only store scale in type domain
-#  b) store scale and offset
+function Base.collect(it::Base.Iterators.ProductIterator{<:Tuple{Vararg{SArray}}})
+    SArray{Tuple{size(it)...},eltype(it),ndims(it),length(it)}(it...)
+end
 
-#function Base.collect(it::Base.Iterators.ProductIterator{<:Tuple{Vararg{SArray}}})
-#    SArray{Tuple{size(it)...},eltype(it),ndims(it),length(it)}(it...)
-#end
+function Base.collect(it::Base.Iterators.ProductIterator{<:Tuple{Vararg{LobattoPoints}}})
+    SArray{Tuple{size(it)...},eltype(it),ndims(it),length(it)}(it...)
+end
 
-#function Base.collect(it::Base.Iterators.ProductIterator{<:Tuple{Vararg{LobattoPoints}}})
-#    SArray{Tuple{size(it)...},eltype(it),ndims(it),length(it)}(it...)
-#end
+Base.mapslices(f, a::SArray{S}; kwargs...) where {S} = SArray{S}(mapslices(f, Array(a); kwargs...))
 
 end

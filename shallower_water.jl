@@ -79,8 +79,8 @@ end
 #Note: try out ⋅
 
 overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
-    myΔh = ComboFun(MArray(Δh[elem].coeffs), Δh.basis)
-    myΔU⃗ = ComboFun(MArray(ΔU⃗[elem].coeffs), ΔU⃗.basis)
+    myΔh = ComboFun(Δh[elem].basis, MArray(Δh[elem].coeffs))
+    myΔU⃗ = ComboFun(ΔU⃗[elem].basis, MArray(ΔU⃗[elem].coeffs))
     for face in faces(elem)
         elem′ = neighbor(elem, face)
 
@@ -102,8 +102,8 @@ overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, 
         myΔh[face] -= ∫Ψ((normal(face)*(fluxh + fluxh′) - (max( λ, λ′ ) * (hs′ - hs)) / 2) * sJ)
         myΔU⃗[face] -= ∫Ψ((normal(face)*(fluxU⃗ + fluxU⃗′) - (max( λ, λ′ ) * (U⃗′ - U⃗)) / 2) * sJ)
     end
-    Δh[elem] = ComboFun(SArray(myΔh.coeffs), myΔh.basis)
-    ΔU⃗[elem] = ComboFun(SArray(myΔU⃗.coeffs), myΔU⃗.basis)
+    Δh[elem] = ComboFun(myΔh.basis, SArray(myΔh.coeffs))
+    ΔU⃗[elem] = ComboFun(myΔU⃗.basis, SArray(myΔU⃗.coeffs))
 end
 
 overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
