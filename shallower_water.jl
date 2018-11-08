@@ -111,7 +111,7 @@ const rka = 1.0
 const dt = 1.0
 overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
     ht = h[elem] + bathymetry[elem]
-    u⃗ = U⃗[elem] ./ ht
+    u⃗ = U⃗[elem] / ht
 
     M = ∫Ψ(approximate(x⃗ -> J, Ψ))
     for e ∈  neighbors(elem, mesh)
