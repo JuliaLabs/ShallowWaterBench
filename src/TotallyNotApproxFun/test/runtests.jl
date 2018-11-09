@@ -50,18 +50,16 @@ end
     I⃗(x⃗)    = CartesianIndex(floor.(Int, MultilinearFun(X⃗₀, X⃗₁, I⃗₀, I⃗₁ + Î)(x⃗))...)
     # test all(I == I⃗⁻¹(I⃗(I)) for I in elems(mesh))
     # Due to floating-point imprecisions that does not hold exactly everywhere
-    X⃗⁻¹    = map(i -> MultilinearFun((-1.0, -1.0), (1.0, 1.0), I⃗(i), I⃗(i + Î)), CartesianIndices((1:10, 1:10)))
-    X⃗      = map(i -> MultilinearFun(I⃗(i), I⃗(i + Î), (-1.0, -1.0), (1.0, 1.0)), CartesianIndices((1:10, 1:10)))
-    println(I⃗⁻¹.coeffs)
-    println(I⃗⁻¹.basis.bases[1].points)
+    X⃗⁻¹    = map(i -> MultilinearFun((-1.0, -1.0), (1.0, 1.0), I⃗⁻¹(i), I⃗⁻¹(i + Î)), CartesianIndices((1:10, 1:10)))
+    X⃗      = map(i -> MultilinearFun(I⃗⁻¹(i), I⃗⁻¹(i + Î), (-1.0, -1.0), (1.0, 1.0)), CartesianIndices((1:10, 1:10)))
 
-    @test I⃗⁻¹(1.5, 2.5) ≈ @SVector [0.15, 0.25]
-    @test I⃗(@SVector [0.15, 0.25]) == CartesianIndex(1, 2)
+    @test I⃗⁻¹(1.5, 2.5) ≈ @SVector [0.05, 0.15]
+    @test I⃗(@SVector [0.05, 0.15]) == CartesianIndex(1, 2)
     @test X⃗[2, 3](0.15, 0.25) ≈ @SVector [0.0, 0.0]
     @test X⃗[2, 3](0.2, 0.3) ≈ @SVector [1.0, 1.0]
     @test X⃗[2, 3](0.1, 0.2) ≈ @SVector [-1.0, -1.0]
-    @test X⃗[2, 3](0.0, 0.0) ≈ @SVector [0.15, 0.25]
-    @test X⃗[2, 3](1.0, 1.0) ≈ @SVector [0.2, 0.3]
-    @test X⃗[2, 3](-1.0, -1.0) ≈ @SVector [0.1, 0.2]
+    @test X⃗⁻¹[2, 3](0.0, 0.0) ≈ @SVector [0.15, 0.25]
+    @test X⃗⁻¹[2, 3](1.0, 1.0) ≈ @SVector [0.2, 0.3]
+    @test X⃗⁻¹[2, 3](-1.0, -1.0) ≈ @SVector [0.1, 0.2]
 end
 

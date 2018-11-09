@@ -40,8 +40,8 @@ function main(backend=backend)
     I⃗(x⃗)    = CartesianIndex(floor.(Int, MultilinearFun(X⃗₀, X⃗₁, I⃗₀, I⃗₁ + Î)(x⃗))...)
     # test all(I == I⃗⁻¹(I⃗(I)) for I in elems(mesh))
     # Due to floating-point imprecisions that does not hold exactly everywhere
-    X⃗⁻¹    = map(i -> MultilinearFun((-1.0, -1.0), (1.0, 1.0), I⃗(i), I⃗(i + Î)), mesh)
-    X⃗      = map(i -> MultilinearFun(I⃗(i), I⃗(i + Î), (-1.0, -1.0), (1.0, 1.0)), mesh)
+    X⃗⁻¹    = map(i -> MultilinearFun((-1.0, -1.0), (1.0, 1.0), I⃗⁻¹(i), I⃗⁻¹(i + Î)), mesh)
+    X⃗      = map(i -> MultilinearFun(I⃗⁻¹(i), I⃗⁻¹(i + Î), (-1.0, -1.0), (1.0, 1.0)), mesh)
 
     # Here is where we construct our basis. In our case, we've chosen an order 3 Lagrange basis over 3 + 1 Lobatto points
 
