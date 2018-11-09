@@ -36,8 +36,8 @@ function main(backend=backend)
     # X⃗⁻¹[i]   is a function which maps element coordinates (-1.0 to 1.0) to coordinates
     # X⃗[i] is a function which maps coordinates to element coordinates (-1.0 to 1.0)
 
-    I⃗⁻¹      = MultilinearFun(I⃗₀, I⃗₁, X⃗₀, X⃗₁)
-    I⃗(x⃗)    = CartesianIndex(floor.(Int, MultilinearFun(X⃗₀, X⃗₁, I⃗₀, I⃗₁)(x⃗))...)
+    I⃗⁻¹      = MultilinearFun(I⃗₀, I⃗₁ + Î, X⃗₀, X⃗₁)
+    I⃗(x⃗)    = CartesianIndex(floor.(Int, MultilinearFun(X⃗₀, X⃗₁, I⃗₀, I⃗₁ + Î)(x⃗))...)
     # test all(I == I⃗⁻¹(I⃗(I)) for I in elems(mesh))
     # Due to floating-point imprecisions that does not hold exactly everywhere
     X⃗⁻¹    = map(i -> MultilinearFun((-1.0, -1.0), (1.0, 1.0), I⃗(i), I⃗(i + Î)), mesh)

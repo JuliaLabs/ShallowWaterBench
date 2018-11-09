@@ -48,6 +48,7 @@ end
 (f::ComboFun)(x...) = apply(f, SVector(x...))
 #f(x) is just sum_i(c_i * b_i(x))
 @inline function apply(f::ComboFun, x::AbstractVector)
+    #sum(f.coeffs .* apply.(f.basis, Ref(x)))
     i = first(eachindex(f.coeffs))
     y = f.coeffs[i] * apply(f.basis[i], x)
     y -= y
@@ -118,8 +119,9 @@ end
 
 (f::ProductFun)(x...) = apply(f, SVector(x...))
 @inline function apply(f::ProductFun{T, N}, x::AbstractVector) where {T, N}
+    #prod(apply.(f.funs, SVector.(x)))
     y = apply(f.funs[1], SVector(x[1]))
-    for i in 1:N
+    for i in 2:N
         y *= apply(f.funs[i], SVector(x[i]))
     end
     y
@@ -178,6 +180,7 @@ LagrangeFun(points::AbstractVector, n) = LagrangeFun{eltype(points), typeof(poin
 #This method is mostly here for clarity, it probably shouldn't be called (TODO specialize somewhere with a stable interpolation routine)
 @inline function apply(f::LagrangeFun{T}, x::AbstractVector{S}) where {T, S}
     DEBUG && @assert length(x) == 1
+    #return prod([(x[1] - f.points[i])/(f.points[f.n] - f.points[i]) for i in filter(!isequal(f.n), eachindex(f.points))])
     T′ = promote_type(T, S)
     T′ = Base.promote_op(/, T′, T′)
     y = one(T′)
