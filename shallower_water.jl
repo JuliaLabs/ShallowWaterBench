@@ -8,7 +8,7 @@ using LinearAlgebra
 using Test
 
 const dim = 2
-const order = 3
+const order = 4
 
 if Base.find_package("GPUMeshing") !== nothing
     using GPUMeshing
