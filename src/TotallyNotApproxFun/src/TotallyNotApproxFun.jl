@@ -252,7 +252,7 @@ function ∇(f::ComboFun{<:Any, 1, <:LagrangeBasis{<:Any, <:SVector{2}}})
 end
 
 function ∇(f::ComboFun{T, N, <:ProductBasis}) where {T, N}
-    partials = [mapslices(c-> ∇(ComboFun(b, c)).coeffs, f.coeffs, dims=n) for (n, b) in enumerate(f.basis.bases)]
+    partials = [dimsmapslices(n, c-> ∇(ComboFun(b, c)).coeffs, f.coeffs) for (n, b) in enumerate(f.basis.bases)]
     ComboFun(f.basis, cat.(partials..., dims = ndims(T) + 1))
 end
 
@@ -265,12 +265,12 @@ function ∫∇Ψ(f::ComboFun{<:Any, 1, <:LagrangeBasis})
 end
 
 function ∫∇Ψ(f::ComboFun{T, N, <:ProductBasis}) where {T, N}
-    return ComboFun(f.basis, sum(mapslices(c->∫∇Ψ(ComboFun(c)).coeffs, getindex.(f.coeffs, n), dims=n) for n in 1:N))
+    return ComboFun(f.basis, sum(dimsmapslices(n, c->∫∇Ψ(ComboFun(c)).coeffs, getindex.(f.coeffs, n)) for n in 1:N))
 end
 
 function ∫∇Ψ(f::ComboFun{<:Any, N, <:ProductBasis{<:Any, N, <:Tuple{Vararg{<:LagrangeBasis}}}}) where {N}
     ω = map(∫, f.basis)
-    return ComboFun(f.basis, (sum(mapslices(c->D(b.points)' * c, ω.*(getindex.(f.coeffs, n)), dims=n) for (n, b) in enumerate(f.basis.bases))))
+    return ComboFun(f.basis, (sum(dimsmapslices(n, c->D(b.points)' * c, ω.*(getindex.(f.coeffs, n))) for (n, b) in enumerate(f.basis.bases))))
 end
 
 function ∫Ψ(f::ComboFun)
@@ -278,6 +278,45 @@ function ∫Ψ(f::ComboFun)
 end
 
 #OVERRIDES
+
+dimsmapslices(dims, f, x) = mapslices(f, x; dims = dims)
+
+@inline function dimsmapslices(dims::Union{Int, Tuple}, f, x::StaticArray)
+    return _mapslices(f, x, Val(dims))
+end
+
+@generated function _mapslices(f, x, ::Val{dims}) where {dims}
+    slicers = Array(collect(product((n in dims ? (:(Colon()),) : 1:size(x)[n] for n = 1:ndims(x))...)))
+    slices = map(slicer -> :(f(x[$(slicer...)])), slicers)
+    for n in 1:ndims(x)
+        if size(slices)[n] != 1
+            slices = mapslices(tube -> :(dimscat($n, $(tube...))), slices; dims=n)
+        end
+    end
+    return quote
+        Base.@_inline_meta
+        return $(slices[1])
+    end
+end
+
+dimscat(dims, as...) = cat(as...; dims = dims)
+
+@inline function dimscat(dims::Union{Int, Tuple}, as::StaticArray...)
+    return _cat(Val(dims), as...)
+end
+
+@generated function _cat(::Val{dims}, as...) where {dims}
+    as = map(((n, a),)->map(i -> :(as[$n][$(Tuple(i)...)]), CartesianIndices(size(a))), enumerate(as))
+    try
+        res = cat(as..., dims=dims)
+        return quote
+            Base.@_inline_meta
+            @inbounds return similar_type(as[1], promote_type(map(eltype, as)...), Size($(size(res)...)))(tuple($(res...)))
+        end
+    catch DimensionMismatch err
+        return :(throw($err))
+    end
+end
 
 StaticArrays.SVector(i::CartesianIndex) = SVector(Tuple(i))
 
@@ -311,7 +350,5 @@ end
 function Base.collect(it::Base.Iterators.ProductIterator{<:Tuple{Vararg{LobattoPoints}}})
     SArray{Tuple{size(it)...},eltype(it),ndims(it),length(it)}(it...)
 end
-
-Base.mapslices(f, a::SArray{S}; kwargs...) where {S} = SArray{S}(mapslices(f, Array(a); kwargs...))
 
 end
