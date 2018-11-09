@@ -45,7 +45,7 @@ function main(backend=backend)
 
     # Here is where we construct our basis. In our case, we've chosen an order 3 Lagrange basis over 3 + 1 Lobatto points
 
-    Ψ = ProductBasis(repeat([LagrangeBasis(LobattoPoints(order))], dim)...)
+    Ψ = ProductBasis(ntuple(i->LagrangeBasis(LobattoPoints(order)), dim)...)
 
     # Set initial conditions
 

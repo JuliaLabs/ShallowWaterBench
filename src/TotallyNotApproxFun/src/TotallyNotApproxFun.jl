@@ -47,7 +47,7 @@ end
 
 (f::ComboFun)(x...) = apply(f, SVector(x...))
 #f(x) is just sum_i(c_i * b_i(x))
-function apply(f::ComboFun, x::AbstractVector)
+@inline function apply(f::ComboFun, x::AbstractVector)
     i = first(eachindex(f.coeffs))
     y = f.coeffs[i] * apply(f.basis[i], x)
     y -= y
@@ -96,7 +96,7 @@ struct ConstFun{T, N} <: Fun{T, N}
 end
 
 (f::ConstFun)(x...) = apply(f, SVector(x...))
-function apply(f::ConstFun{T, N}, x::AbstractVector) where {T, N}
+@inline function apply(f::ConstFun{T, N}, x::AbstractVector) where {T, N}
     f.val
 end
 WrapFun(x) = ConstFun(x)
@@ -117,7 +117,7 @@ function ProductFun(args...)
 end
 
 (f::ProductFun)(x...) = apply(f, SVector(x...))
-function apply(f::ProductFun{T, N}, x::AbstractVector) where {T, N}
+@inline function apply(f::ProductFun{T, N}, x::AbstractVector) where {T, N}
     y = apply(f.funs[1], SVector(x[1]))
     for i in 1:N
         y *= apply(f.funs[i], SVector(x[i]))
@@ -133,7 +133,7 @@ struct ProductBasis{T, N, B <: Tuple{Vararg{OrthoBasis{T, 1}, N}}} <: OrthoBasis
 end
 Base.size(b::ProductBasis) = map(length, b.bases)
 Base.eltype(b::ProductBasis{T, N}) where {T, N} = ProductFun{T, N, Tuple{map(eltype, b.bases)...}}
-function Base.getindex(b::ProductBasis, i::Int...)::eltype(b)
+@inline function Base.getindex(b::ProductBasis, i::Int...)::eltype(b)
     ind = Tuple(CartesianIndices(b)[i...])
     ProductFun(map((b,i)->getindex(b, i...), b.bases, ind)...)
 end
@@ -145,7 +145,7 @@ points(b::ProductBasis) = SVector.(collect(product(map(points, b.bases)...)))
 #
 # In the future, these functions should be replaced with functions that operate on a "shape" class
 #
-function Base.getindex(f::ComboFun{<:Any, N, <:ProductBasis}, I::CartesianIndex{N}) where {N}
+@inline function Base.getindex(f::ComboFun{<:Any, N, <:ProductBasis}, I::CartesianIndex{N}) where {N}
     I = Tuple(I)
     return ComboFun(ProductBasis(f.basis.bases[findall(isequal(0), I)]...),
                     f.coeffs[map(n -> I[n] ==  1 ? lastindex(f.coeffs, n) :
@@ -176,7 +176,7 @@ end
 LagrangeFun(points::AbstractVector, n) = LagrangeFun{eltype(points), typeof(points)}(points, n)
 (f::LagrangeFun)(x...) = apply(f, SVector(x...))
 #This method is mostly here for clarity, it probably shouldn't be called (TODO specialize somewhere with a stable interpolation routine)
-function apply(f::LagrangeFun{T}, x::AbstractVector{S}) where {T, S}
+@inline function apply(f::LagrangeFun{T}, x::AbstractVector{S}) where {T, S}
     DEBUG && @assert length(x) == 1
     T′ = promote_type(T, S)
     T′ = Base.promote_op(/, T′, T′)
@@ -195,7 +195,7 @@ struct LagrangeBasis{T, P <: AbstractVector{T}} <: OrthoBasis{T, 1, LagrangeFun{
 end
 
 Base.size(b::LagrangeBasis) = size(b.points)
-Base.getindex(b::LagrangeBasis, i::Int) = LagrangeFun(b.points, i)
+@inline Base.getindex(b::LagrangeBasis, i::Int) = LagrangeFun(b.points, i)
 points(b::LagrangeBasis) = b.points
 #Base.Broadcast.broadcastable(b::LagrangeBasis) = SArray{Tuple{size(b)...}}(b) #TODO generalize to non-static children
 
@@ -204,7 +204,10 @@ struct LobattoPoints{T, N} <: AbstractVector{T} end
 
 Base.size(p::LobattoPoints{T, N}) where {T, N} = (N,)
 @generated function Base.getindex(p::LobattoPoints{T, N}, i::Int) where {T, N}
-    return :($(SVector{N, T}(lglpoints(T, N - 1)[1]))[i])
+    return quote
+        Base.@_inline_meta
+        $(SVector{N, T}(lglpoints(T, N - 1)[1]))[i]
+    end
 end
 LobattoPoints(n) = LobattoPoints{Float64, n + 1}()
 #Base.Broadcast.broadcastable(p::LobattoPoints) = SArray{Tuple{size(p)...}}(p)
@@ -337,7 +340,7 @@ end
         end
         newsize = ($((n in dims ? size(a)[n] : :(firstsize[$(count += 1)]) for n = 1:ndims(a))...),)
         if firstslice isa StaticArray && all(isa(StaticArray
-        return 
+        return
     end
 end
 
