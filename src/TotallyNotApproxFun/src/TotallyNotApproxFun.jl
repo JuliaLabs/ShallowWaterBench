@@ -209,9 +209,11 @@ end
 LobattoPoints(n) = LobattoPoints{Float64, n + 1}()
 #Base.Broadcast.broadcastable(p::LobattoPoints) = SArray{Tuple{size(p)...}}(p)
 
-function MultilinearFun(x₀, x₁, y₀, y₁)
-    x₀, x₁, y₀, y₁ = (SVector(x₀), SVector(x₁), SVector(y₀), SVector(y₁))
-    ComboFun(ProductBasis(LagrangeBasis.(SVector.(x₀, x₁))...), SVector.(collect(product(SVector.(y₀, y₁)...))))
+MultilinearFun(x₀, x₁, y₀, y₁) = MultilinearFun(SVector(x₀), SVector(x₁), SVector(y₀), SVector(y₁))
+function MultilinearFun(x₀::SVector{N}, x₁::SVector{N}, y₀::SVector{N}, y₁::SVector{N}) where N
+    basis = ProductBasis(ntuple(i->LagrangeBasis(SVector(x₀[i], x₁[i])), N)...)
+    coeffs = map(SVector, collect(product(ntuple(i->SVector(y₀[i], y₁[i]), N)...)))
+    ComboFun(basis, coeffs)
 end
 
 D(p) = spectralderivative(p)
