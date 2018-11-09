@@ -282,22 +282,75 @@ end
 dimsmapslices(dims, f, x) = mapslices(f, x; dims = dims)
 
 @inline function dimsmapslices(dims::Union{Int, Tuple}, f, x::StaticArray)
-    return _mapslices(f, x, Val(dims))
+    return _mapslices_slice(Val(dims), f, x)
 end
 
-@generated function _mapslices(f, x, ::Val{dims}) where {dims}
-    slicers = Array(collect(product((n in dims ? (:(Colon()),) : 1:size(x)[n] for n = 1:ndims(x))...)))
-    slices = map(slicer -> :(f(x[$(slicer...)])), slicers)
-    for n in 1:ndims(x)
+@generated function _mapslices_slice(::Val{dims}, f, a) where {dims}
+    slicers = Array(collect(product((n in dims ? (:(Colon()),) : 1:size(a)[n] for n = 1:ndims(a))...)))
+    slices = map(slicer -> :(f(a[$(slicer...)])), slicers)
+    return quote
+        Base.@_inline_meta
+        _mapslices_size(Val(size(a)), Val(dims), $(slices...))
+    end
+end
+
+@generated function _mapslices_size(::Val{oldsize}, ::Val{dims}, slices::StaticArray...) where {oldsize, dims}
+    if all(isequal(size(slices[1])), map(size, slices))
+        count = 0
+        firstsize = (size(slices[1])..., ones(Int, length(oldsize))...)
+        newsize = ((n in dims ? oldsize[n] : firstsize[count+=1] for n = 1:length(oldsize))...,)
+        return quote
+            Base.@_inline_meta
+            _mapslices_cleanup(Val($newsize), Val($dims), slices...)
+        end
+    else
+        return :(throw(DimensionMismatch()))
+    end
+end
+
+@generated function _mapslices_cleanup(::Val{newsize}, ::Val{dims}, slices::StaticArray...) where {newsize, dims}
+    slicers = Array(collect(product((n in dims ? (:(Colon()),) : 1:newsize[n] for n = 1:length(newsize))...)))
+    thunk = quote
+        Base.@_inline_meta
+        res = @MArray zeros($(eltype(slices[1])), $(newsize...))
+    end
+    for (i, slicer) in enumerate(slicers)
+        push!(thunk.args, :(res[$(slicer...)] = slices[$i]))
+    end
+    push!(thunk.args, :(return similar_type(slices[1], Size($(newsize...)))(res)))
+    return thunk
+end
+
+#=
+
+            @inbounds return similar_type(as[1], promote_type(map(eltype, as)...), Size($(size(res)...)))(tuple($(res...)))
+
+        firstsize = (size(firstslice)..., $(ones(Int, length(oldsize))...))
+        newsize = ($((n in dims ? oldsize[n] : :(firstsize[$(count+=1)]) for n = 1:length(oldsize))...),)
+        count = 0
+
+    count = 0
+
+    return quote
+        Base.@_inline_meta
+        firstslice = $(slices[1])
+        otherslices = $(slices[2:end])
+        firstsize = $(ones(Int, ndims(a))...)
+        if firstslice isa AbstractArray
+            firstsize = (size(firstslice)..., firstsize...)
+        end
+        newsize = ($((n in dims ? size(a)[n] : :(firstsize[$(count += 1)]) for n = 1:ndims(a))...),)
+        if firstslice isa StaticArray && all(isa(StaticArray
+        return 
+    end
+end
+
+    for n in 1:ndims(a)
         if size(slices)[n] != 1
             slices = mapslices(tube -> :(dimscat($n, $(tube...))), slices; dims=n)
         end
     end
-    return quote
-        Base.@_inline_meta
-        return $(slices[1])
-    end
-end
+=#
 
 dimscat(dims, as...) = cat(as...; dims = dims)
 
