@@ -11,6 +11,8 @@ export points, LobattoPoints
 export normal
 export ∇, ∫, ∫Ψ, ∫∇Ψ
 
+const DEBUG = false
+
 #A representation of a T-valued function in an N-Dimensional space.
 abstract type Fun{T, N} end
 
@@ -38,7 +40,7 @@ struct ComboFun{T, N, B<:Basis{<:Any, N}, C<:AbstractArray{T}} <: Fun{T, N}
     basis::B
     coeffs::C
     function ComboFun(basis::B, coeffs::C) where {T, N, B<:Basis{<:Any, N}, C<:AbstractArray{T}}
-        @assert length(basis) == length(coeffs)
+        DEBUG && @assert length(basis) == length(coeffs)
         new{T, N, B, C}(basis, coeffs)
     end
 end
@@ -70,7 +72,7 @@ end
 for op in (:(Base.:+), :(Base.:-), :(Base.:*), :(Base.:/), :(Base.exp), :(Base.:^), :(Base.max))
     @eval begin
         function $op(a::ComboFun{T, N, B}, b::ComboFun{S, N, B}) where {T, S, N, B <: OrthoBasis}
-            @assert a.basis == b.basis
+            DEBUG && @assert a.basis == b.basis
             ComboFun(a.basis, $op.(a.coeffs, b.coeffs))
         end
         function $op(a::ComboFun{T, N, B}, b) where {T, N, B <: OrthoBasis}
@@ -153,7 +155,7 @@ end
 
 function Base.setindex!(f::ComboFun{<:Any, N, <:ProductBasis}, g::ComboFun{<:Any, M, <:ProductBasis}, I::CartesianIndex{N}) where {N, M}
     I = Tuple(I)
-    @assert ProductBasis(f.basis.bases[findall(isequal(0), I)]...) == g.basis
+    DEBUG && @assert ProductBasis(f.basis.bases[findall(isequal(0), I)]...) == g.basis
     f.coeffs[map(n -> I[n] ==  1 ? lastindex(f.coeffs, n) :
                                           I[n] == -1 ? 1                      :
                                                        Colon()                , 1:N)...] = g.coeffs
@@ -175,7 +177,7 @@ LagrangeFun(points::AbstractVector, n) = LagrangeFun{eltype(points), typeof(poin
 (f::LagrangeFun)(x...) = apply(f, SVector(x...))
 #This method is mostly here for clarity, it probably shouldn't be called (TODO specialize somewhere with a stable interpolation routine)
 function apply(f::LagrangeFun{T}, x::AbstractVector{S}) where {T, S}
-    @assert length(x) == 1
+    DEBUG && @assert length(x) == 1
     T′ = promote_type(T, S)
     T′ = Base.promote_op(/, T′, T′)
     y = one(T′)
