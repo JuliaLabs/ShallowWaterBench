@@ -282,43 +282,37 @@ end
 dimsmapslices(dims, f, x) = mapslices(f, x; dims = dims)
 
 @inline function dimsmapslices(dims::Union{Int, Tuple}, f, x::StaticArray)
-    return _mapslices_slice(Val(dims), f, x)
+    return _mapslices_exposition(Val(dims), f, x)
 end
 
-@generated function _mapslices_slice(::Val{dims}, f, a) where {dims}
+@generated function _mapslices_exposition(::Val{dims}, f, a) where {dims}
     slicers = Array(collect(product((n in dims ? (:(Colon()),) : 1:size(a)[n] for n = 1:ndims(a))...)))
     slices = map(slicer -> :(f(a[$(slicer...)])), slicers)
     return quote
         Base.@_inline_meta
-        _mapslices_size(Val(size(a)), Val(dims), $(slices...))
+        _mapslices_denoument(Val(size(a)), Val(dims), $(slices...))
     end
 end
 
-@generated function _mapslices_size(::Val{oldsize}, ::Val{dims}, slices::StaticArray...) where {oldsize, dims}
+@generated function _mapslices_denoument(::Val{oldsize}, ::Val{dims}, slices::StaticArray...) where {oldsize, dims}
     if all(isequal(size(slices[1])), map(size, slices))
         count = 0
         firstsize = (size(slices[1])..., ones(Int, length(oldsize))...)
         newsize = ((n in dims ? oldsize[n] : firstsize[count+=1] for n = 1:length(oldsize))...,)
-        return quote
+
+        slicers = Array(collect(product((n in dims ? (:(Colon()),) : 1:newsize[n] for n = 1:length(newsize))...)))
+        thunk = quote
             Base.@_inline_meta
-            _mapslices_cleanup(Val($newsize), Val($dims), slices...)
+            res = @MArray zeros($(eltype(slices[1])), $(newsize...))
         end
+        for (i, slicer) in enumerate(slicers)
+            push!(thunk.args, :(@inbounds res[$(slicer...)] = slices[$i]))
+        end
+        push!(thunk.args, :(return similar_type(slices[1], Size($(newsize...)))(res)))
+        return thunk
     else
         return :(throw(DimensionMismatch()))
     end
-end
-
-@generated function _mapslices_cleanup(::Val{newsize}, ::Val{dims}, slices::StaticArray...) where {newsize, dims}
-    slicers = Array(collect(product((n in dims ? (:(Colon()),) : 1:newsize[n] for n = 1:length(newsize))...)))
-    thunk = quote
-        Base.@_inline_meta
-        res = @MArray zeros($(eltype(slices[1])), $(newsize...))
-    end
-    for (i, slicer) in enumerate(slicers)
-        push!(thunk.args, :(res[$(slicer...)] = slices[$i]))
-    end
-    push!(thunk.args, :(return similar_type(slices[1], Size($(newsize...)))(res)))
-    return thunk
 end
 
 #=
