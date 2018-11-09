@@ -74,13 +74,14 @@ elems(mesh::Mesh) = throw(MethodError(elems, (typeof(Mesh),)))
 storage(::Type{T}, mesh::Mesh) where T = throw(MethodError(storage, (T, typeof(Mesh),)))
 
 function Base.map(f::F, mesh::Mesh) where F
-    T = Base._return_type(f, (eltype(elems(mesh)),))
+    T = Base._return_type(f, Tuple{eltype(elems(mesh))})
     if !isconcretetype(T)
         I = first(elems(mesh))
         T = typeof(f(I))
     end
     out = storage(T, mesh)
-    overelems(mesh, f, out) do I, mesh, f::Function, out
+    overelems(mesh, out) do I, mesh, out
+        Base.@_inline_meta
         out[I] = f(I)
     end
     return out

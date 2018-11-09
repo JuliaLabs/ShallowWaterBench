@@ -152,7 +152,8 @@ splice(t::Tuple, n) = ntuple(i -> t[i + (i >= n)], length(t) - 1) # thanks james
 @inline function Base.getindex(f::ComboFun{<:Any, N, <:ProductBasis}, I::CartesianIndex{N}) where {N}
     I = Tuple(I)
     I1 = splice(ntuple(identity, Val(N)), something(findfirst(!iszero, I)))
-    return ComboFun(ProductBasis(f.basis.bases[I1]...),
+    basis = map(i -> f.basis.bases[i], I1)
+    return ComboFun(ProductBasis(basis...),
                     f.coeffs[ntuple(n -> I[n] ==  1 ? lastindex(f.coeffs, n) :
                                          I[n] == -1 ? 1                      :
                                          Colon(), Val(N))...])
