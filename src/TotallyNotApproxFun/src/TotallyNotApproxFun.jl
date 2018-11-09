@@ -146,11 +146,13 @@ points(b::ProductBasis) = SVector.(collect(product(map(points, b.bases)...)))
 # In the future, these functions should be replaced with functions that operate on a "shape" class
 #
 @inline function Base.getindex(f::ComboFun{<:Any, N, <:ProductBasis}, I::CartesianIndex{N}) where {N}
+splice(t::Tuple, n) = ntuple(i -> t[i + (i >= n)], length(t) - 1) # thanks jameson!
     I = Tuple(I)
-    return ComboFun(ProductBasis(f.basis.bases[findall(isequal(0), I)]...),
-                    f.coeffs[map(n -> I[n] ==  1 ? lastindex(f.coeffs, n) :
-                                      I[n] == -1 ? 1                      :
-                                                   Colon()                , 1:N)...])
+    I1 = splice(I, something(findfirst(!iszero, I)))
+    return ComboFun(ProductBasis(f.basis.bases[I1]...),
+                    f.coeffs[ntuple(n -> I[n] ==  1 ? lastindex(f.coeffs, n) :
+                                         I[n] == -1 ? 1                      :
+                                         Colon(), Val(N))...])
 end
 
 function Base.setindex!(f::ComboFun{<:Any, N, <:ProductBasis}, g::ComboFun{<:Any, M, <:ProductBasis}, I::CartesianIndex{N}) where {N, M}
