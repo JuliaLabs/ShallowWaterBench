@@ -18,7 +18,7 @@ else
     backend = CPU()
 end
 
-function main(;backend=backend)
+function main(backend=backend)
     mesh = PeriodicCartesianMesh(ntuple(i-> 1:10, dim); backend=backend)
 
     # the whole mesh will go from X⃗₀ to X⃗₁
