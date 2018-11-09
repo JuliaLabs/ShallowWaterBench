@@ -135,7 +135,7 @@ Base.size(b::ProductBasis) = map(length, b.bases)
 Base.eltype(b::ProductBasis{T, N}) where {T, N} = ProductFun{T, N, Tuple{map(eltype, b.bases)...}}
 @inline function Base.getindex(b::ProductBasis, i::Int...)::eltype(b)
     ind = Tuple(CartesianIndices(b)[i...])
-    ProductFun(map((b,i)->getindex(b, i...), b.bases, ind)...)
+    ProductFun(map((b,j)->getindex(b, j), b.bases, ind)...)
 end
 points(b::ProductBasis) = SVector.(collect(product(map(points, b.bases)...)))
 #Base.Broadcast.broadcastable(b::ProductBasis) = SArray{Tuple{size(b)...}}(b) #TODO generalize to non-static children
