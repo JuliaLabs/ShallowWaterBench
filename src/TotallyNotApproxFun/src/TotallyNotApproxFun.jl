@@ -267,7 +267,7 @@ end
 
 function ∇(f::ComboFun{T, N, <:ProductBasis}) where {T, N}
     partials = [dimsmapslices(n, c-> ∇(ComboFun(b, c)).coeffs, f.coeffs) for (n, b) in enumerate(f.basis.bases)]
-    ComboFun(f.basis, cat.(partials..., dims = ndims(T) + 1))
+    ComboFun(f.basis, dimscat.(ndims(T) + 1, partials...))
 end
 
 function ∫∇Ψ(f::ComboFun) where {T, N}
