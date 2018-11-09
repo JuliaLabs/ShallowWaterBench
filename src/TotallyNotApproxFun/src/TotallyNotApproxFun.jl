@@ -140,7 +140,7 @@ end
 points(b::ProductBasis) = SVector.(collect(product(map(points, b.bases)...)))
 #Base.Broadcast.broadcastable(b::ProductBasis) = SArray{Tuple{size(b)...}}(b) #TODO generalize to non-static children
 
-splice(t::Tuple, n) = ntuple(i -> t[i + (i >= n)], length(t) - 1) # thanks jameson!
+slicer(N, n) = ntuple(i -> i + (i >= n), N - 1) # thanks jameson!
 
 #
 # BEGIN TODO
@@ -149,7 +149,7 @@ splice(t::Tuple, n) = ntuple(i -> t[i + (i >= n)], length(t) - 1) # thanks james
 #
 @inline function Base.getindex(f::ComboFun{<:Any, N, <:ProductBasis}, I::CartesianIndex{N}) where {N}
     I = Tuple(I)
-    I1 = splice(ntuple(identity, Val(N)), something(findfirst(!iszero, I)))
+    I1 = slicer(N, something(findfirst(!iszero, I)))
     return ComboFun(ProductBasis(f.basis.bases[I1]...),
                     f.coeffs[ntuple(n -> I[n] ==  1 ? lastindex(f.coeffs, n) :
                                          I[n] == -1 ? 1                      :
