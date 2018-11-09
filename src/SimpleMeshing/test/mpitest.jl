@@ -48,22 +48,24 @@ let z = mpistorage(Complex{Int8}, mesh)
 end
 
 
+@show myrank
 s = mpistorage(Float64, mesh)
 fill!(s, myrank)
-@show s.arr
 P = CartesianPartition(globalInds, ranks)
 
 nbs = map(ghostboundaries(mesh), boundaries(mesh)) do ghostelems, elems
     locate(P, translate(globalMesh, ghostelems))
 end
 
-for iter = 1:3
+@time for iter = 1:30
+    async_recv!(s, mesh, nbs)
+    wait_send(s) # iter=1 this is a noop
     overelems(mesh,iter, s) do elem, m, iter, s
         ns = neighbors(elem, m)
         s[elem] = sum(map(j->s[elem] * (iter-1), ns)) + s[elem]
     end
-
-    sync!(s, mesh, nbs)
+    async_send!(s, mesh, nbs)
+    wait_recv(s)
     overelems(mesh,iter, s) do elem,m, iter, s
         s[elem] = s[elem] / iter
     end

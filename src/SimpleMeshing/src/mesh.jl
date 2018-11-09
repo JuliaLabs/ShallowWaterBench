@@ -2,7 +2,8 @@ module Meshing
     export Mesh, CartesianMesh, PeriodicCartesianMesh, GhostCartesianMesh, CPU
     export faces, neighbor, neighbors, overelems, storage, elems
     export ghostboundaries, boundaries, backend, translate
-    export BufferedArray, mpistorage, neighbor_ranks, fill_sendbufs!, flush_recvbufs!, sync!
+    export BufferedArray, mpistorage, neighbor_ranks, fill_sendbufs!,
+           flush_recvbufs!, async_send!, async_recv!, wait_send, wait_recv
 
 using Base.Cartesian
 using OffsetArrays
@@ -251,6 +252,8 @@ struct BufferedArray{T, N, A<:AbstractArray{T,N}} <: AbstractArray{T,N}
     arr::A
     recv_buffers::Tuple
     send_buffers::Tuple
+    recv_reqs::Vector{MPI.Request}
+    send_reqs::Vector{MPI.Request}
 end
 
 Base.size(a::BufferedArray) = size(a.arr)
@@ -272,34 +275,40 @@ function fill_sendbufs!(a::BufferedArray, mesh::GhostCartesianMesh)
 end
 
 function mpistorage(::Type{T}, mesh::GhostCartesianMesh{N, CPU}) where {T, N}
-    recv_bufs = map(idxs -> Array{T}(undef, size(idxs)), ghostboundaries(mesh))
-    send_bufs = map(idxs -> Array{T}(undef, size(idxs)), ghostboundaries(mesh))
-    BufferedArray(storage(T, mesh), recv_bufs, send_bufs)
+    bs = ghostboundaries(mesh)
+    recv_bufs = map(idxs -> Array{T}(undef, size(idxs)), bs)
+    send_bufs = map(idxs -> Array{T}(undef, size(idxs)), bs)
+
+    recv_reqs = fill(MPI.REQUEST_NULL, length(bs))
+    send_reqs = fill(MPI.REQUEST_NULL, length(bs))
+
+    BufferedArray(storage(T, mesh), recv_bufs, send_bufs, recv_reqs, send_reqs)
 end
 
 const mpicomm = MPI.COMM_WORLD
 
-function sync!(a::BufferedArray, mesh, nbrranks)
-    # TODO: reorder this to first receive and then send
+function async_send!(a::BufferedArray, mesh, nbrranks)
 
     fill_sendbufs!(a, mesh)
 
-    sendreqs = fill(MPI.REQUEST_NULL, length(nbrranks))
-    recvreqs = fill(MPI.REQUEST_NULL, length(nbrranks))
-
-
-    for (sendbuf, to) in zip(a.send_buffers, nbrranks)
-        push!(sendreqs, MPI.Isend(sendbuf, to, 777, mpicomm))
+    for i in 1:length(nbrranks)
+        a.send_reqs[i] = MPI.Isend(a.send_buffers[i],
+                                   nbrranks[i], 777, mpicomm)
     end
+end
 
-    for (recvbuf, from) in zip(a.recv_buffers, nbrranks)
-        push!(recvreqs, MPI.Irecv!(recvbuf, from, 777, mpicomm))
+wait_send(a::BufferedArray) = MPI.Waitall!(a.send_reqs)
+
+function async_recv!(a::BufferedArray, mesh, nbrranks)
+
+    for i in 1:length(nbrranks)
+        a.recv_reqs[i] = MPI.Irecv!(a.recv_buffers[i],
+                                    nbrranks[i], 777, mpicomm)
     end
-
-    MPI.Waitall!(sendreqs)
-    MPI.Waitall!(recvreqs)
 
     flush_recvbufs!(a, mesh)
 end
+
+wait_recv(a::BufferedArray) = MPI.Waitall!(a.recv_reqs)
 
 end # module
