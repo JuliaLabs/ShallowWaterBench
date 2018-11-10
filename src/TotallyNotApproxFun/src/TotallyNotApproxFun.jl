@@ -76,16 +76,16 @@ for op in (:(Base.:+), :(Base.:-), :(Base.:*), :(Base.:/), :(Base.exp), :(Base.:
     @eval begin
         function $op(a::ComboFun{T, N, B}, b::ComboFun{S, N, B}) where {T, S, N, B <: OrthoBasis}
             DEBUG && @assert a.basis == b.basis
-            ComboFun(a.basis, $op.(a.coeffs, b.coeffs))
+            ComboFun(a.basis, map($op, a.coeffs, b.coeffs))
         end
         function $op(a::ComboFun{T, N, B}, b) where {T, N, B <: OrthoBasis}
-            ComboFun(a.basis, $op.(a.coeffs, Ref(b)))
+            ComboFun(a.basis, map(x->$op(x, b), a.coeffs))
         end
         function $op(a::ComboFun{T, N, B}, b::Fun) where {T, N, B <: OrthoBasis}
             throw(NotImplementedError())
         end
         function $op(a, b::ComboFun{T, N, B}) where {T, N, B <: OrthoBasis}
-            ComboFun(b.basis, $op.(Ref(a), b.coeffs))
+            ComboFun(b.basis, map(x->$op(a, x), b.coeffs))
         end
         function $op(a::Fun, b::ComboFun{T, N, B}) where {T, N, B <: OrthoBasis}
             throw(NotImplementedError())
