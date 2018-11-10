@@ -6,7 +6,6 @@ using StaticArrays
 using Base.Iterators
 using LinearAlgebra
 using Test
-using InteractiveUtils
 
 const dim = 2
 const order = 4

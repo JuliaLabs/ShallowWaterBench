@@ -233,7 +233,10 @@ end
 D(p) = spectralderivative(p)
 D(p::SVector{N}) where {N} = SMatrix{N, N}(spectralderivative(p))
 @generated function D(p::LobattoPoints{T, N}) where {T, N}
-    return :($(SMatrix{N, N}(spectralderivative(LobattoPoints{T, N}()))))
+    return quote
+        Base.@_inline_meta
+        SMatrix{N, N}(spectralderivative(LobattoPoints{T, N}()))
+    end
 end
 
 ∫(f::ComboFun) = sum(map(∫, f.basis) .* f.coeffs)
@@ -290,9 +293,21 @@ function ∫∇Ψ(f::ComboFun{T, N, <:ProductBasis}) where {T, N}
     return ComboFun(f.basis, sum(dimsmapslices(n, c->∫∇Ψ(ComboFun(c)).coeffs, getindex.(f.coeffs, n)) for n in 1:N))
 end
 
+#TODO generate these?
+function ∫∇Ψ(f::ComboFun{<:Any, 1, <:ProductBasis{<:Any, 1, <:Tuple{Vararg{<:LagrangeBasis}}}})
+    ω = map(∫, f.basis)
+    return ComboFun(f.basis, dimsmapslices(1, c->D(f.basis.bases[1].points)' * c, ω.*(getindex.(f.coeffs, 1))))
+end
+
+function ∫∇Ψ(f::ComboFun{<:Any, 2, <:ProductBasis{<:Any, 2, <:Tuple{Vararg{<:LagrangeBasis}}}})
+    ω = map(∫, f.basis)
+    return ComboFun(f.basis, dimsmapslices(1, c->D(f.basis.bases[1].points)' * c, ω.*(getindex.(f.coeffs, 1))) +
+                             dimsmapslices(2, c->D(f.basis.bases[2].points)' * c, ω.*(getindex.(f.coeffs, 2))))
+end
+
 function ∫∇Ψ(f::ComboFun{<:Any, N, <:ProductBasis{<:Any, N, <:Tuple{Vararg{<:LagrangeBasis}}}}) where {N}
     ω = map(∫, f.basis)
-    return ComboFun(f.basis, (sum(dimsmapslices(n, c->D(b.points)' * c, ω.*(getindex.(f.coeffs, n))) for (n, b) in enumerate(f.basis.bases))))
+    return ComboFun(f.basis, (sum(dimsmapslices(n, c->D(f.basis.bases[n].points)' * c, ω.*(getindex.(f.coeffs, n))) for n in 1:N)))
 end
 
 function ∫Ψ(f::ComboFun)
