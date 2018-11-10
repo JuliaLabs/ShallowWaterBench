@@ -147,6 +147,28 @@ points(b::ProductBasis) = SVector.(collect(product(map(points, b.bases)...)))
 
 splicer(N, n) = ntuple(i -> i + (i >= n), N - 1) # thanks jameson!
 
+"""
+Creates a staticly sized reindexer
+"""
+function splicedim(A::AbstractArray, dim::Int, select::Int)
+    # nelems = prod(ntuple(i -> i == dim ? 1 : size(A, i), ndims(A)))
+    nelems   = prod(ntuple(i -> size(A, i), ndims(A) - 1))
+    # nelems   = length(A) ÷ size(A, dim)
+    # check that we are square
+    DEBUG && @assert all(a->size(A, 1) == a, size(A))
+    stride = prod(ntuple(i -> i >= dim ? 1 : size(A, i), ndims(A)))
+    extent = size(A, dim)
+
+    # newdims = ntuple(i->size(A, i + (i >= dim)), ndims(A) - 1)
+    newdims = ntuple(i->size(A, i), ndims(A) - 1)
+    vals = ntuple(Val(nelems)) do n
+        # we could do "A[...]" here to get the values, but that would mean we can't
+        # reuse this for setindex
+        (select - 1) * stride + fld(n - 1, stride) * stride * extent + mod1(n, stride)
+    end
+    return SArray{Tuple{newdims...}}(vals)
+ end
+
 #
 # BEGIN TODO
 #
@@ -154,20 +176,23 @@ splicer(N, n) = ntuple(i -> i + (i >= n), N - 1) # thanks jameson!
 #
 @inline function Base.getindex(f::ComboFun{<:Any, N, <:ProductBasis}, I::CartesianIndex{N}) where {N}
     I = Tuple(I)
-    I1 = splicer(N, something(findfirst(!iszero, I)))
+    dim = something(findfirst(!iszero, I))
+    I1 = splicer(N, dim)
     basis = map(i -> f.basis.bases[i], I1)
-    return ComboFun(ProductBasis(basis...),
-                    f.coeffs[ntuple(n -> I[n] ==  1 ? lastindex(f.coeffs, n) :
-                                         I[n] == -1 ? 1                      :
-                                         Colon(), Val(N))...])
+    n = I[dim] == 1 ? lastindex(f.coeffs, dim) : 1
+    DEBUG && @assert I[dim] != 0
+    coeffidx = splicedim(f.coeffs, dim, n)
+    return ComboFun(ProductBasis(basis...), f.coeffs[coeffidx])
 end
 
 function Base.setindex!(f::ComboFun{<:Any, N, <:ProductBasis}, g::ComboFun{<:Any, M, <:ProductBasis}, I::CartesianIndex{N}) where {N, M}
     I = Tuple(I)
+    dim = something(findfirst(!iszero, I))
+    n = I[dim] == 1 ? lastindex(f.coeffs, dim) : 1
+    coeffidx = splicedim(f.coeffs, dim, n)
+    DEBUG && @assert I[dim] != 0
     DEBUG && @assert ProductBasis(f.basis.bases[findall(isequal(0), I)]...) == g.basis
-    f.coeffs[map(n -> I[n] ==  1 ? lastindex(f.coeffs, n) :
-                                          I[n] == -1 ? 1                      :
-                                                       Colon()                , 1:N)...] = g.coeffs
+    f.coeffs[coeffidx] = g.coeffs
 end
 
 normal(face::CartesianIndex) = SVector(face)
