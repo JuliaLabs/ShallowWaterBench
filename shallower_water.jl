@@ -68,6 +68,7 @@ function main(backend=backend)
     #nsteps = ceil(Int64, tend / dt)
     #dt = tend / nsteps
 
+    for notavar in 1:(320*5)
     overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
         #function volumerhs!(rhs, Q::NamedTuple{S, NTuple{3, T}}, bathymetry, metric, D, ω, elems, gravity, δnl) where {S, T}
         ht         = h[elem] + bathymetry[elem]
@@ -131,6 +132,7 @@ function main(backend=backend)
 
         U⃗[elem] = (h[elem]+bathymetry[elem]) * u⃗
     end
+end
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
