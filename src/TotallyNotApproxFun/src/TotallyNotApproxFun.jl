@@ -176,16 +176,18 @@ function splicedim(A::AbstractArray, dim::Int, select::Int)
     basis = map(i -> f.basis.bases[i], I1)
     n = I[dim] == 1 ? lastindex(f.coeffs, dim) : 1
     DEBUG && @assert I[dim] != 0
-    coeffs = splicedim(f.coeffs, dim, n)
-    return ComboFun(ProductBasis(basis...), f.coeffs[coeffs])
+    coeffidx = splicedim(f.coeffs, dim, n)
+    return ComboFun(ProductBasis(basis...), f.coeffs[coeffidx])
 end
 
 function Base.setindex!(f::ComboFun{<:Any, N, <:ProductBasis}, g::ComboFun{<:Any, M, <:ProductBasis}, I::CartesianIndex{N}) where {N, M}
     I = Tuple(I)
+    dim = something(findfirst(!iszero, I))
+    n = I[dim] == 1 ? lastindex(f.coeffs, dim) : 1
+    coeffidx = splicedim(f.coeffs, dim, n)
+    DEBUG && @assert I[dim] != 0
     DEBUG && @assert ProductBasis(f.basis.bases[findall(isequal(0), I)]...) == g.basis
-    f.coeffs[map(n -> I[n] ==  1 ? lastindex(f.coeffs, n) :
-                                          I[n] == -1 ? 1                      :
-                                                       Colon()                , 1:N)...] = g.coeffs
+    f.coeffs[coeffidx] = g.coeffs
 end
 
 normal(face::CartesianIndex) = SVector(face)
