@@ -6,6 +6,7 @@ using StaticArrays
 using Base.Iterators
 using LinearAlgebra
 using Test
+using MPI
 
 const dim = 2
 const order = 4
@@ -18,8 +19,14 @@ else
     backend = CPU()
 end
 
-function main(backend=backend)
-    mesh = PeriodicCartesianMesh(ntuple(i-> 1:10, dim); backend=backend)
+MPI.Initialized() || MPI.Init()
+MPI.finalize_atexit()
+
+const mpicomm = MPI.COMM_WORLD
+
+function main(backend=backend, storage=storage)
+    globalMesh = PeriodicCartesianMesh(ntuple(i-> 1:10, dim); backend=backend)
+    mesh = localpart(globalMesh, mpicomm)
 
     # the whole mesh will go from X⃗₀ to X⃗₁
     # (to add a vector arrow to a quantity like `v⃗`, type `v\vec` and then press tab.)
@@ -67,7 +74,16 @@ function main(backend=backend)
     #nsteps = ceil(Int64, tend / dt)
     #dt = tend / nsteps
 
+    sync_storage!(h)
+    sync_storage!(bathymetry)
+    sync_storage!(U⃗)
+
     for notavar in 1:(320*5)
+
+    # start receiving
+    async_recv!(mesh)
+    wait_send(mesh) # iter=1 this is a noop
+
     overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
         #function volumerhs!(rhs, Q::NamedTuple{S, NTuple{3, T}}, bathymetry, metric, D, ω, elems, gravity, δnl) where {S, T}
         ht         = h[elem] + bathymetry[elem]
@@ -81,6 +97,9 @@ function main(backend=backend)
     elem₁ = first(elems(mesh))
     faces₁ = faces(elem₁, mesh)
     Jfaces = SVector{length(faces₁)}([norm(∇(X⃗[elem₁][face])(zero(Î))) for face in faces₁])
+
+    async_send!(mesh)
+    wait_recv(mesh) # fill in data from previous iteration
 
     overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
         myΔh = ComboFun(Δh[elem].basis, MArray(Δh[elem].coeffs))
