@@ -145,61 +145,59 @@ end
 points(b::ProductBasis) = SVector.(collect(product(map(points, b.bases)...)))
 #Base.Broadcast.broadcastable(b::ProductBasis) = SArray{Tuple{size(b)...}}(b) #TODO generalize to non-static children
 
-splicer(N, n) = ntuple(i -> i + (i >= n), N - 1) # thanks jameson!
-
-"""
-Creates a staticly sized reindexer
-"""
-function splicedim(A::AbstractArray, dim::Int, select::Int)
-    # nelems = prod(ntuple(i -> i == dim ? 1 : size(A, i), ndims(A)))
-    nelems   = prod(ntuple(i -> size(A, i), ndims(A) - 1))
-    # nelems   = length(A) ÷ size(A, dim)
-    # check that we are square
-    DEBUG && @assert all(a->size(A, 1) == a, size(A))
-    stride = prod(ntuple(i -> i >= dim ? 1 : size(A, i), ndims(A)))
-    extent = size(A, dim)
-
-    # newdims = ntuple(i->size(A, i + (i >= dim)), ndims(A) - 1)
-    newdims = ntuple(i->size(A, i), ndims(A) - 1)
-    vals = ntuple(Val(nelems)) do n
-        # we could do "A[...]" here to get the values, but that would mean we can't
-        # reuse this for setindex
-        (select - 1) * stride + fld(n - 1, stride) * stride * extent + mod1(n, stride)
-    end
-    return SArray{Tuple{newdims...}}(vals)
- end
-
-#
-# BEGIN TODO
-#
-# In the future, these functions should be replaced with functions that operate on a "shape" class
-#
-@inline function Base.getindex(f::ComboFun{<:Any, N, <:ProductBasis}, I::CartesianIndex{N}) where {N}
+#=
+function Base.getindex(f::ComboFun{<:Any, N, <:ProductBasis}, I::CartesianIndex{N}) where {N}
     I = Tuple(I)
-    dim = something(findfirst(!iszero, I))
-    I1 = splicer(N, dim)
-    basis = map(i -> f.basis.bases[i], I1)
-    n = I[dim] == 1 ? lastindex(f.coeffs, dim) : 1
-    DEBUG && @assert I[dim] != 0
-    coeffidx = splicedim(f.coeffs, dim, n)
-    return ComboFun(ProductBasis(basis...), f.coeffs[coeffidx])
+    basis = ProductBasis(f.basis.bases[findall(iszero, I)]...)
+    coeffs = f.coeffs[ntuple(n -> I[n] == 0 ? Colon() : (I[n] == 1 ? lastindex(f.coeffs, n) : 1), N)...]
+    return ComboFun(basis, coeffs)
 end
 
 function Base.setindex!(f::ComboFun{<:Any, N, <:ProductBasis}, g::ComboFun{<:Any, M, <:ProductBasis}, I::CartesianIndex{N}) where {N, M}
     I = Tuple(I)
-    dim = something(findfirst(!iszero, I))
-    n = I[dim] == 1 ? lastindex(f.coeffs, dim) : 1
-    coeffidx = splicedim(f.coeffs, dim, n)
-    DEBUG && @assert I[dim] != 0
-    DEBUG && @assert ProductBasis(f.basis.bases[findall(isequal(0), I)]...) == g.basis
-    f.coeffs[coeffidx] = g.coeffs
+    DEBUG && @assert ProductBasis(f.basis.bases[findall(iszero, I)]...) == g.basis
+    f.coeffs[ntuple(n -> I[n] == 0 ? Colon() : (I[n] == 1 ? lastindex(f.coeffs, n) : 1), N)...] = g.coeffs
+    return f
 end
+=#
 
 normal(face::CartesianIndex) = SVector(face)
 
-#
-# END TODO
-#
+@generated function Base.getindex(f::ComboFun{<:Any, N, <:ProductBasis}, I::CartesianIndex{N}) where {N}
+    thunk = quote
+        Base.@_inline_meta
+    end
+    for dim in 1:N
+        for (offset, select) in ((-1, 1), (1, :end))
+            push!(thunk.args, quote
+                if I == CartesianIndex($(ntuple(n->n == dim ? offset : 0, N)...))
+                    basis = ProductBasis($(ntuple(n->:(f.basis.bases[$(n >= dim ? n + 1 : n)]), N - 1)...))
+                    coeffs = f.coeffs[$(ntuple(n->n == dim ? select : :(:), N)...)]
+                    return ComboFun(basis, coeffs)
+                end
+            end)
+        end
+    end
+    return thunk
+end
+
+@generated function Base.setindex!(f::ComboFun{<:Any, N, <:ProductBasis}, g::ComboFun{<:Any, M, <:ProductBasis}, I::CartesianIndex{N}) where {N, M}
+    thunk = quote
+        Base.@_inline_meta
+    end
+    for dim in 1:N
+        for (offset, select) in ((-1, 1), (1, :end))
+            push!(thunk.args, quote
+                if I == CartesianIndex($(ntuple(n->n == dim ? offset : 0, N)...))
+                    DEBUG && @assert ProductBasis($(ntuple(n->:(f.basis.bases[$(n >= dim ? n + 1 : n)]), N - 1)...)) == g.basis
+                    f.coeffs[$(ntuple(n->n == dim ? select : :(:), N)...)] = g.coeffs
+                    return f
+                end
+            end)
+        end
+    end
+    return thunk
+end
 
 #The minimum-degree polynomial function which is 1 at the nth point and 0 at the other points
 struct LagrangeFun{T, P <: AbstractVector{T}} <: Fun{T, 1}
