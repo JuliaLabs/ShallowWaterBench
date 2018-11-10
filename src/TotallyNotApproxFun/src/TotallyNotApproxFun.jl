@@ -135,6 +135,7 @@ struct ProductBasis{T, N, B <: Tuple{Vararg{OrthoBasis{T, 1}, N}}} <: OrthoBasis
     ProductBasis(basis::OrthoBasis{T, 1}) where {T} = new{T, 1, Tuple{typeof(basis)}}((basis,))
     ProductBasis(bases::OrthoBasis{T, 1}...) where {T} = new{T, length(bases), typeof(bases)}(bases)
 end
+#ProductBasis{T, N, B}() where {T, N, B} = ProductBasis((b() for b in B.parameters)...)
 Base.size(b::ProductBasis) = map(length, b.bases)
 Base.eltype(b::ProductBasis{T, N}) where {T, N} = ProductFun{T, N, Tuple{map(eltype, b.bases)...}}
 @inline function Base.getindex(b::ProductBasis, i::Int...)::eltype(b)
@@ -202,6 +203,7 @@ end
 struct LagrangeBasis{T, P <: AbstractVector{T}} <: OrthoBasis{T, 1, LagrangeFun{T, P}}
     points::P
 end
+#LagrangeBasis{T, P}() where {T, P <: AbstractVector{T}} = LagrangeBasis{T, P}(P())
 
 Base.size(b::LagrangeBasis) = size(b.points)
 @inline Base.getindex(b::LagrangeBasis, i::Int) = LagrangeFun(b.points, i)
@@ -239,15 +241,21 @@ end
 ∫(f::ProductFun) = prod(map(∫, f.funs))
 
 @generated function Base.map(::typeof(∫), b::LagrangeBasis{T, <:LobattoPoints{T, N}}) where {T, N}
-    return :($(SVector{N, T}(lglpoints(T, N - 1)[2])))
+    return quote
+        Base.@_inline_meta
+        return $(SVector{N, T}(lglpoints(T, N - 1)[2]))
+    end
 end
 
-function Base.map(::typeof(∫), b::ProductBasis{T, N}) where {T, N}
-    return prod.(collect(product((map(∫, basis) for basis in b.bases)...)))
+@inline function Base.map(::typeof(∫), b::ProductBasis{T, N}) where {T, N}
+    return map(prod, collect(product(ntuple(n->map(∫, b.bases[n]), N)...)))
 end
 
 @generated function ∫(f::LagrangeFun{T, <:LobattoPoints{T, N}}) where {T, N}
-    return :($(SVector{N, T}(lglpoints(T, N - 1)[2]))[f.n])
+    return quote
+        Base.@_inline_meta
+        return $(SVector{N, T}(lglpoints(T, N - 1)[2]))[f.n]
+    end
 end
 
 ∇(f::ComboFun) = sum(map(∇, f.basis) .* f)
@@ -291,8 +299,29 @@ function ∫Ψ(f::ComboFun)
     return ComboFun(f.basis, f.coeffs .* map(∫, f.basis))
 end
 
-function Base.collect(it::Base.Iterators.ProductIterator{<:Tuple{Vararg{LobattoPoints}}})
-    SArray{Tuple{size(it)...},eltype(it),ndims(it),length(it)}(it...)
+#@generated function ∫Ψ(f::ComboFun{T, N, B}) where {T, N, B <:ProductBasis{<:Any, <:Any, <:Tuple{Vararg{<:LagrangeBasis{<:Any, <:LobattoPoints}}}}}
+#    return :(ComboFun(f.basis, f.coeffs .* $(map(∫, B()))))
+#end
+
+function Base.collect(it::Base.Iterators.ProductIterator{TT}) where {TT<:Tuple{Vararg{LobattoPoints}}}
+    sproduct(it.iterators)
+end
+
+_length(::Type{LobattoPoints{T, N}}) where {T, N} = N
+_eltype(::Type{LobattoPoints{T, N}}) where {T, N} = T
+using Base.Cartesian
+@generated function sproduct(points::TT) where {N, TT<:Tuple{Vararg{LobattoPoints, N}}}
+    lengths = map(_length, TT.parameters)
+    eltypes = map(_eltype, TT.parameters)
+    M = prod(lengths)
+    I = CartesianIndices((lengths...,))
+    quote
+        Base.@_inline_meta
+        @nexprs $N j->(P_j = points[j])
+        @nexprs $N j->(S_j = length(P_j))
+        @nexprs $M j->(elem_j = @ntuple $N k-> P_k[($I)[j][k]])
+        @ncall $M SArray{Tuple{$(lengths...)}, Tuple{$(eltypes...)}, $N, $M} elem
+    end
 end
 
 end

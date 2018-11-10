@@ -57,21 +57,14 @@ end
 
 StaticArrays.SVector(i::CartesianIndex) = SVector(Tuple(i))
 
-function Base.collect(it::Base.Iterators.ProductIterator{<:Tuple{Vararg{SArray}}})
-    SArray{Tuple{size(it)...},eltype(it),ndims(it),length(it)}(it...)
-end
-
-#=
-function Base.collect(it::Base.Iterators.ProductIterator{TT}) where {TT<:Tuple{Vararg{LobattoPoints}}}
+function Base.collect(it::Base.Iterators.ProductIterator{TT}) where {TT<:Tuple{Vararg{SArray}}}
     sproduct(it.iterators)
 end
 
-_length(::Type{LobattoPoints{T, N}}) where {T, N} = N
-_eltype(::Type{LobattoPoints{T, N}}) where {T, N} = T
 using Base.Cartesian
-@generated function sproduct(points::TT) where {N, TT<:Tuple{Vararg{LobattoPoints, N}}}
-    lengths = map(_length, TT.parameters)
-    eltypes = map(_eltype, TT.parameters)
+@generated function sproduct(points::TT) where {N, TT<:Tuple{Vararg{SArray, N}}}
+    lengths = map(length, TT.parameters)
+    eltypes = map(eltype, TT.parameters)
     M = prod(lengths)
     I = CartesianIndices((lengths...,))
     quote
@@ -82,6 +75,8 @@ using Base.Cartesian
         @ncall $M SArray{Tuple{$(lengths...)}, Tuple{$(eltypes...)}, $N, $M} elem
     end
 end
+
+#=
 
     @inbounds return similar_type(as[1], promote_type(map(eltype, as)...), Size($(size(res)...)))(tuple($(res...)))
 
