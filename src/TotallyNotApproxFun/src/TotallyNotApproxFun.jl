@@ -147,6 +147,9 @@ points(b::ProductBasis) = SVector.(collect(product(map(points, b.bases)...)))
 
 splicer(N, n) = ntuple(i -> i + (i >= n), N - 1) # thanks jameson!
 
+"""
+Creates a staticly sized reindexer
+"""
 function splicedim(A::AbstractArray, dim::Int, select::Int)
     # nelems = prod(ntuple(i -> i == dim ? 1 : size(A, i), ndims(A)))
     nelems   = prod(ntuple(i -> size(A, i), ndims(A) - 1))
@@ -159,6 +162,8 @@ function splicedim(A::AbstractArray, dim::Int, select::Int)
     # newdims = ntuple(i->size(A, i + (i >= dim)), ndims(A) - 1)
     newdims = ntuple(i->size(A, i), ndims(A) - 1)
     vals = ntuple(Val(nelems)) do n
+        # we could do "A[...]" here to get the values, but that would mean we can't
+        # reuse this for setindex
         (select - 1) * stride + fld(n - 1, stride) * stride * extent + mod1(n, stride)
     end
     return SArray{Tuple{newdims...}}(vals)
