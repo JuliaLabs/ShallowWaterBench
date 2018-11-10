@@ -177,7 +177,7 @@ function splicedim(A::AbstractArray, dim::Int, select::Int)
     n = I[dim] == 1 ? lastindex(f.coeffs, dim) : 1
     DEBUG && @assert I[dim] != 0
     coeffs = splicedim(f.coeffs, dim, n)
-    return ComboFun(ProductBasis(basis...), coeffs)
+    return ComboFun(ProductBasis(basis...), f.coeffs[coeffs])
 end
 
 function Base.setindex!(f::ComboFun{<:Any, N, <:ProductBasis}, g::ComboFun{<:Any, M, <:ProductBasis}, I::CartesianIndex{N}) where {N, M}
