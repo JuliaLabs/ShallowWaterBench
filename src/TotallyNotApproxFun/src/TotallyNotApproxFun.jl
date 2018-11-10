@@ -260,7 +260,7 @@ D(p::SVector{N}) where {N} = SMatrix{N, N}(spectralderivative(p))
 @generated function D(p::LobattoPoints{T, N}) where {T, N}
     return quote
         Base.@_inline_meta
-        SMatrix{N, N}(spectralderivative(LobattoPoints{T, N}()))
+        $(SMatrix{N, N}(spectralderivative(LobattoPoints{T, N}())))
     end
 end
 
