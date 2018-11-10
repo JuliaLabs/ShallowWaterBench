@@ -1,7 +1,9 @@
 using MPI
 
-export BufferedArray, mpistorage, neighbor_ranks, fill_sendbufs!,
+export BufferedArray, localpart, neighbor_ranks, fill_sendbufs!,
        flush_recvbufs!, async_send!, async_recv!, wait_send, wait_recv
+
+# TODO: get rid of this type and store all buffers in the LocalCartesianMesh?
 
 """
     LocalCartesianMesh(G, neighbors)
@@ -11,55 +13,6 @@ struct LocalCartesianMesh{N, B, G<:CartesianMesh{N, B}} <: CartesianMesh{N, B}
     neighbor_ranks::Tuple{Vararg{Int}}
     synced_storage::Vector{Any}
 end
-elems(mesh::LocalCartesianMesh) = elems(mesh.mesh)
-neighbor(elem, face, mesh::LocalCartesianMesh) = neighbor(elem, face, mesh)
-overelems(f, mesh::LocalCartesianMesh, args...) = overelems(f, mesh.mesh, args...)
-
-function storage(::Type{T}, mesh::LocalCartesianMesh{N, CPU}) where {T, N}
-    bs = ghostboundaries(mesh)
-    recv_bufs = map(idxs -> Array{T}(undef, size(idxs)), bs)
-    send_bufs = map(idxs -> Array{T}(undef, size(idxs)), bs)
-
-    recv_reqs = fill(MPI.REQUEST_NULL, length(bs))
-    send_reqs = fill(MPI.REQUEST_NULL, length(bs))
-
-    BufferedArray(storage(T, mesh), recv_bufs, send_bufs, recv_reqs, send_reqs)
-end
-
-"""
-    sync_storage!(mesh::LocalCartesianMesh, st::BufferedArray)
-
-Forward MPI communication `async_send!`, `async_recv!`, `wait_send`, `wait_recv` on `mesh`
-to `st` BufferedArray.
-"""
-sync_storage!(mesh::LocalCartesianMesh, st::BufferedArray) = push!(mesh.synced_storage, st)
-
-"""
-    localpart(globalMesh, mpicomm[, ranks=[1:MPI.Comm_size(mpicomm);]'])
-
-Create a localpart of a global mesh
-
-# Arguments
-
-- `globalMesh`: usually a `PeriodicCartesianMesh`
-- `mpicomm`: MPI.MPIComm object
-- `ranks`: an array showing rank layout. Defaults to [1 2 ... N] where N is the number of workers in mpicomm's pool.
-
-# Returns
-
-a `GhostCartesianMesh` with indices offset to represent local part
-in the global mesh.
-"""
-function localpart(globalMesh, mpicomm, ranks=1:MPI.Comm_rank(mpicomm))
-    P = CartesianPartition(globalInds, ranks)
-    inds = rankindices(P, MPI.Comm_rank(mpicomm))
-    mesh = GhostCartesianMesh(CPU(), inds) # TODO: GPU??!
-    nbs = map(ghostboundaries(mesh), boundaries(mesh)) do ghostelems, elems
-        locate(P, translate(globalMesh, ghostelems))
-    end
-    LocalCartesianMesh(mesh, nbs, [])
-end
-
 
 struct BufferedArray{T, N, A<:AbstractArray{T,N}} <: AbstractArray{T,N}
     arr::A
@@ -75,7 +28,7 @@ Base.setindex!(a::BufferedArray, val, idx...) = a.arr[idx...] = val
 Base.axes(a::BufferedArray) = axes(a.arr) # now includes offsets
 Base.IndexStyle(a::BufferedArray) = IndexStyle(a.arr)
 
-function flush_recvbufs!(a::BufferedArray, mesh::GhostCartesianMesh)
+function flush_recvbufs!(a::BufferedArray, mesh::LocalCartesianMesh)
     for (bidx, buf) in zip(ghostboundaries(mesh), a.recv_buffers)
         a[bidx] .= buf
     end
@@ -110,6 +63,29 @@ function async_recv!(a::BufferedArray, mesh::LocalCartesianMesh)
 end
 
 wait_recv(a::BufferedArray) = MPI.Waitall!(a.recv_reqs)
+
+elems(mesh::LocalCartesianMesh) = elems(mesh.mesh)
+neighbor(elem, face, mesh::LocalCartesianMesh) = neighbor(elem, face, mesh)
+overelems(f, mesh::LocalCartesianMesh, args...) = overelems(f, mesh.mesh, args...)
+
+function storage(::Type{T}, mesh::LocalCartesianMesh{N, CPU}) where {T, N}
+    bs = ghostboundaries(mesh)
+    recv_bufs = map(idxs -> Array{T}(undef, size(idxs)), bs)
+    send_bufs = map(idxs -> Array{T}(undef, size(idxs)), bs)
+
+    recv_reqs = fill(MPI.REQUEST_NULL, length(bs))
+    send_reqs = fill(MPI.REQUEST_NULL, length(bs))
+
+    BufferedArray(storage(T, mesh), recv_bufs, send_bufs, recv_reqs, send_reqs)
+end
+
+"""
+    sync_storage!(mesh::LocalCartesianMesh, st::BufferedArray)
+
+Forward MPI communication `async_send!`, `async_recv!`, `wait_send`, `wait_recv` on `mesh`
+to `st` BufferedArray.
+"""
+sync_storage!(mesh::LocalCartesianMesh, st::BufferedArray) = push!(mesh.synced_storage, st)
 
 function async_send!(m::LocalCartesianMesh)
     for s in m.synced_storage

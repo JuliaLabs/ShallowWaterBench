@@ -252,4 +252,6 @@ end
     return head, tail
 end
 
+include("mpi_mesh.jl")
+
 end # module

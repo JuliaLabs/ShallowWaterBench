@@ -2,7 +2,8 @@ module SimpleMeshing
 
 export Meshing, Partitions
 
-include("mesh.jl")
 include("partitions.jl")
+include("mesh.jl")
+include("localpart.jl")
 
 end
