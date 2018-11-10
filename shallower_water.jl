@@ -18,7 +18,7 @@ else
     backend = CPU()
 end
 
-function main(backend=backend)
+function main(tend=0.32, backend=backend)
     mesh = PeriodicCartesianMesh(ntuple(i-> 1:10, dim); backend=backend)
 
     # the whole mesh will go from X⃗₀ to X⃗₁
@@ -82,10 +82,10 @@ function main(backend=backend)
            Float64(2006345519317) / Float64(3224310063776),
            Float64(2802321613138) / Float64(2924317926251))
 
-    dt = 0.0025
-    nsteps = 2
-    #nsteps = ceil(Int64, tend / dt)
-    #dt = tend / nsteps
+    dt = 0.001
+
+    nsteps = ceil(Int64, tend / dt)
+    dt = tend / nsteps
     for step in 1:nsteps
         for s in 1:length(RKA)
             overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
@@ -144,7 +144,6 @@ function main(backend=backend)
             end
         end
     end
-end
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
