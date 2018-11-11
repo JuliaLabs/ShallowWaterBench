@@ -64,6 +64,14 @@ end
 using Adapt
 using OffsetArrays
 
+_adapt(x) = x
+_adapt(x::Tuple) = map(_adapt, x)
+_adapt(x::AbstractArray) = adapt(CuArray, x)
+using StaticArrays
+_adapt(x::StaticArray) = x
+_adapt(mesh::PeriodicCartesianMesh) where N = PeriodicCartesianMesh(GPU(), mesh.inds)
+_adapt(mesh::GhostCartesianMesh) where N = GhostCartesianMesh(GPU(), mesh.inds)
+
 Adapt.adapt_structure(to, x::OffsetArray) = OffsetArray(adapt(to, parent(x)), x.offsets)
 Base.Broadcast.BroadcastStyle(::Type{<:OffsetArray{<:Any, <:Any, AA}}) where AA = Base.Broadcast.BroadcastStyle(AA)
 
@@ -104,7 +112,9 @@ end
 ##
 # Compatibility between TotallyNotApproxFun and CUDAnative
 ##
-import TotallyNotApproxFun: ComboFun, OrthoBasis, Fun
+import TotallyNotApproxFun: ComboFun, OrthoBasis, Fun, Basis
+_adapt(x::Fun) = x
+_adapt(x::Basis) = x
 
 for op in (:(CUDAnative.:exp),)
     @eval begin
