@@ -150,7 +150,14 @@ function translate(mesh::PeriodicCartesianMesh{N}, boundary) where N
     pI = axes(elems(mesh))
     b = ntuple(N) do i
         b = boundary.indices[i]
-        length(b) > 1 ? b : mod(b[1], pI[i])
+        if length(b) > 1
+            b
+        else
+            s = mod(b[1], pI[i])
+            s:s # because if all dimensions are single numbers,
+                # we will call CartesianIndices(a::Int, b::Int)
+                # which returns CartesianIndices((1:a, 1:b))
+        end
     end
     CartesianIndices(b)
 end
