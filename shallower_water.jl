@@ -92,6 +92,18 @@ function setup(backend)
     gravity    = 10.0
     #sJ         = det(∇(X⃗⁻¹[1][face]))
 
+    # Keep these 3 arrays in sync
+    sync_storage!(mesh, h)
+    sync_storage!(mesh, bathymetry)
+    sync_storage!(mesh, U⃗)
+
+    # Let's sync before getting started.
+    # XXX: is this what swe_example.jl does?
+    async_recv!(mesh)
+    async_send!(mesh)
+    wait_send(mesh)
+    wait_recv(mesh)
+
     elem₁ = first(elems(mesh))
     faces₁ = faces(elem₁, mesh)
     Jfaces = SVector{length(faces₁)}([norm(∇(X⃗⁻¹[elem₁][face])(zero(Î))) for face in faces₁])
@@ -111,13 +123,12 @@ function compute(tend, mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, gravity, X⃗,
     #nsteps = ceil(Int64, tend / dt)
     #dt = tend / nsteps
 
-    sync_storage!(mesh, h)
-    sync_storage!(mesh, bathymetry)
-    sync_storage!(mesh, U⃗)
-
     for step in 1:nsteps
         for s in 1:length(RKA)
 
+            async_recv!(mesh)
+            wait_send(mesh) # iter=1 this is a noop
+            async_send!(mesh)
             # Volume integral
             overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
                 #function volumerhs!(rhs, Q::NamedTuple{S, NTuple{3, T}}, bathymetry, metric, D, ω, elems, gravity, δnl) where {S, T}
@@ -130,6 +141,9 @@ function compute(tend, mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, gravity, X⃗,
             end
 
             # Flux integral
+
+            wait_recv(mesh) # fill in data from previous iteration
+
             overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
                 myΔh = ComboFun(Δh[elem].basis, MArray(Δh[elem].coeffs))
                 myΔU⃗ = ComboFun(ΔU⃗[elem].basis, MArray(ΔU⃗[elem].coeffs))
