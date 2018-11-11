@@ -7,6 +7,24 @@ using Base.Iterators
 using LinearAlgebra
 using Test
 
+const RKA = (Float64(0),
+             Float64(-567301805773)  / Float64(1357537059087),
+             Float64(-2404267990393) / Float64(2016746695238),
+             Float64(-3550918686646) / Float64(2091501179385),
+             Float64(-1275806237668) / Float64(842570457699 ))
+
+const RKB = (Float64(1432997174477) / Float64(9575080441755 ),
+             Float64(5161836677717) / Float64(13612068292357),
+             Float64(1720146321549) / Float64(2090206949498 ),
+             Float64(3134564353537) / Float64(4481467310338 ),
+             Float64(2277821191437) / Float64(14882151754819))
+
+const RKC = (Float64(0),
+             Float64(1432997174477) / Float64(9575080441755),
+             Float64(2526269341429) / Float64(6820363962896),
+             Float64(2006345519317) / Float64(3224310063776),
+             Float64(2802321613138) / Float64(2924317926251))
+
 const dim = 2
 const order = 3
 
@@ -77,16 +95,7 @@ function main(tend=0.32, backend=backend)
                 fluxh      = U⃗[elem]
                 Δh[elem]  += ∫∇Ψ(dX⃗ * fluxh * J)
                 fluxU⃗      = (u⃗ * u⃗' * ht) + I * gravity * (0.5 * h[elem]^2 + h[elem] * bathymetry[elem])
-
-                ## JUST FOR NOW BECAUSE ∫∇Ψ 2D Version has bug
-                fU1         = fluxU⃗*SVector(1.0, 0.0)
-                fU2         = fluxU⃗*SVector(0.0, 1.0)
-                dU1 = ∫∇Ψ(dX⃗ * fU1 * J)
-                dU2 = ∫∇Ψ(dX⃗ * fU2 * J)
-                ΔU⃗[elem]  += SVector(1.0, 0.0)*dU1 + SVector(0.0, 1.0)*dU2
-
-                ## IF Fixed we just use this instead of line 100-104
-                #ΔU⃗[elem]  += ∫∇Ψ(dX⃗ * fluxU⃗ * J)
+                ΔU⃗[elem]  += ∫∇Ψ(dX⃗ * fluxU⃗ * J)
             end
 
             elem₁ = first(elems(mesh))
