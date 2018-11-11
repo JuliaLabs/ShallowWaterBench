@@ -105,7 +105,9 @@ function main(tend=0.32, backend=backend)
             overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
                 myΔh = ComboFun(Δh[elem].basis, MArray(Δh[elem].coeffs))
                 myΔU⃗ = ComboFun(ΔU⃗[elem].basis, MArray(ΔU⃗[elem].coeffs))
-                for (face, Jface) in zip(faces(elem, mesh), Jfaces)
+
+                map(faces(elem, mesh)) do face
+                    Jface = Jfaces[SimpleMeshing.Meshing.faceidx(face)]
                     elem′ = neighbor(elem, face, mesh)
                     face′ = opposite(face, elem′, mesh)
 

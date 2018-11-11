@@ -108,6 +108,8 @@ Base.axes(::CartesianNeighbors{N}) where {N} = (1:2N,)
 Base.getindex(::CartesianNeighbors{N}, i::Int) where {N} = CartesianNeighbor{N,i}()
 Base.getindex(::CartesianNeighbors{N}, ::Val{i}) where {N,i} = CartesianNeighbor{N,i}()
 
+faceidx(::CartesianNeighbor{N, I}) where {N, I} = I
+
 function Base.convert(::Type{CartesianIndex}, ::CartesianNeighbor{N, i}) where {N, i}
     CartesianIndex(ntuple(n -> i ==     n ?  1 :
                                i == n + N ? -1 :
