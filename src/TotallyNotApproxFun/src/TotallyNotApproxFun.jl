@@ -13,6 +13,8 @@ export ∇, ∫, ∫Ψ, ∫∇Ψ
 
 const DEBUG = false
 
+include("util.jl")
+
 #A representation of a T-valued function in an N-Dimensional space.
 abstract type Fun{T, N} end
 
@@ -74,16 +76,16 @@ for op in (:(Base.:+), :(Base.:-), :(Base.:*), :(Base.:/), :(Base.exp), :(Base.:
     @eval begin
         function $op(a::ComboFun{T, N, B}, b::ComboFun{S, N, B}) where {T, S, N, B <: OrthoBasis}
             DEBUG && @assert a.basis == b.basis
-            ComboFun(a.basis, $op.(a.coeffs, b.coeffs))
+            ComboFun(a.basis, map($op, a.coeffs, b.coeffs))
         end
         function $op(a::ComboFun{T, N, B}, b) where {T, N, B <: OrthoBasis}
-            ComboFun(a.basis, $op.(a.coeffs, Ref(b)))
+            ComboFun(a.basis, map(x->$op(x, b), a.coeffs))
         end
         function $op(a::ComboFun{T, N, B}, b::Fun) where {T, N, B <: OrthoBasis}
             throw(NotImplementedError())
         end
         function $op(a, b::ComboFun{T, N, B}) where {T, N, B <: OrthoBasis}
-            ComboFun(b.basis, $op.(Ref(a), b.coeffs))
+            ComboFun(b.basis, map(x->$op(a, x), b.coeffs))
         end
         function $op(a::Fun, b::ComboFun{T, N, B}) where {T, N, B <: OrthoBasis}
             throw(NotImplementedError())
@@ -133,6 +135,7 @@ struct ProductBasis{T, N, B <: Tuple{Vararg{OrthoBasis{T, 1}, N}}} <: OrthoBasis
     ProductBasis(basis::OrthoBasis{T, 1}) where {T} = new{T, 1, Tuple{typeof(basis)}}((basis,))
     ProductBasis(bases::OrthoBasis{T, 1}...) where {T} = new{T, length(bases), typeof(bases)}(bases)
 end
+#ProductBasis{T, N, B}() where {T, N, B} = ProductBasis((b() for b in B.parameters)...)
 Base.size(b::ProductBasis) = map(length, b.bases)
 Base.eltype(b::ProductBasis{T, N}) where {T, N} = ProductFun{T, N, Tuple{map(eltype, b.bases)...}}
 @inline function Base.getindex(b::ProductBasis, i::Int...)::eltype(b)
@@ -142,35 +145,59 @@ end
 points(b::ProductBasis) = SVector.(collect(product(map(points, b.bases)...)))
 #Base.Broadcast.broadcastable(b::ProductBasis) = SArray{Tuple{size(b)...}}(b) #TODO generalize to non-static children
 
-splice(t::Tuple, n) = ntuple(i -> t[i + (i >= n)], length(t) - 1) # thanks jameson!
-
-#
-# BEGIN TODO
-#
-# In the future, these functions should be replaced with functions that operate on a "shape" class
-#
-@inline function Base.getindex(f::ComboFun{<:Any, N, <:ProductBasis}, I::CartesianIndex{N}) where {N}
+#=
+function Base.getindex(f::ComboFun{<:Any, N, <:ProductBasis}, I::CartesianIndex{N}) where {N}
     I = Tuple(I)
-    I1 = splice(ntuple(identity, Val(N)), something(findfirst(!iszero, I)))
-    return ComboFun(ProductBasis(f.basis.bases[I1]...),
-                    f.coeffs[ntuple(n -> I[n] ==  1 ? lastindex(f.coeffs, n) :
-                                         I[n] == -1 ? 1                      :
-                                         Colon(), Val(N))...])
+    basis = ProductBasis(f.basis.bases[findall(iszero, I)]...)
+    coeffs = f.coeffs[ntuple(n -> I[n] == 0 ? Colon() : (I[n] == 1 ? lastindex(f.coeffs, n) : 1), N)...]
+    return ComboFun(basis, coeffs)
 end
 
 function Base.setindex!(f::ComboFun{<:Any, N, <:ProductBasis}, g::ComboFun{<:Any, M, <:ProductBasis}, I::CartesianIndex{N}) where {N, M}
     I = Tuple(I)
-    DEBUG && @assert ProductBasis(f.basis.bases[findall(isequal(0), I)]...) == g.basis
-    f.coeffs[map(n -> I[n] ==  1 ? lastindex(f.coeffs, n) :
-                                          I[n] == -1 ? 1                      :
-                                                       Colon()                , 1:N)...] = g.coeffs
+    DEBUG && @assert ProductBasis(f.basis.bases[findall(iszero, I)]...) == g.basis
+    f.coeffs[ntuple(n -> I[n] == 0 ? Colon() : (I[n] == 1 ? lastindex(f.coeffs, n) : 1), N)...] = g.coeffs
+    return f
 end
+=#
 
 normal(face::CartesianIndex) = SVector(face)
 
-#
-# END TODO
-#
+@generated function Base.getindex(f::ComboFun{<:Any, N, <:ProductBasis}, I::CartesianIndex{N}) where {N}
+    thunk = quote
+        Base.@_inline_meta
+    end
+    for dim in 1:N
+        for (offset, select) in ((-1, 1), (1, :end))
+            push!(thunk.args, quote
+                if I == CartesianIndex($(ntuple(n->n == dim ? offset : 0, N)...))
+                    basis = ProductBasis($(ntuple(n->:(f.basis.bases[$(n >= dim ? n + 1 : n)]), N - 1)...))
+                    coeffs = f.coeffs[$(ntuple(n->n == dim ? select : :(:), N)...)]
+                    return ComboFun(basis, coeffs)
+                end
+            end)
+        end
+    end
+    return thunk
+end
+
+@generated function Base.setindex!(f::ComboFun{<:Any, N, <:ProductBasis}, g::ComboFun{<:Any, M, <:ProductBasis}, I::CartesianIndex{N}) where {N, M}
+    thunk = quote
+        Base.@_inline_meta
+    end
+    for dim in 1:N
+        for (offset, select) in ((-1, 1), (1, :end))
+            push!(thunk.args, quote
+                if I == CartesianIndex($(ntuple(n->n == dim ? offset : 0, N)...))
+                    DEBUG && @assert ProductBasis($(ntuple(n->:(f.basis.bases[$(n >= dim ? n + 1 : n)]), N - 1)...)) == g.basis
+                    f.coeffs[$(ntuple(n->n == dim ? select : :(:), N)...)] = g.coeffs
+                    return f
+                end
+            end)
+        end
+    end
+    return thunk
+end
 
 #The minimum-degree polynomial function which is 1 at the nth point and 0 at the other points
 struct LagrangeFun{T, P <: AbstractVector{T}} <: Fun{T, 1}
@@ -199,6 +226,7 @@ end
 struct LagrangeBasis{T, P <: AbstractVector{T}} <: OrthoBasis{T, 1, LagrangeFun{T, P}}
     points::P
 end
+#LagrangeBasis{T, P}() where {T, P <: AbstractVector{T}} = LagrangeBasis{T, P}(P())
 
 Base.size(b::LagrangeBasis) = size(b.points)
 @inline Base.getindex(b::LagrangeBasis, i::Int) = LagrangeFun(b.points, i)
@@ -228,7 +256,10 @@ end
 D(p) = spectralderivative(p)
 D(p::SVector{N}) where {N} = SMatrix{N, N}(spectralderivative(p))
 @generated function D(p::LobattoPoints{T, N}) where {T, N}
-    return :($(SMatrix{N, N}(spectralderivative(LobattoPoints{T, N}()))))
+    return quote
+        Base.@_inline_meta
+        $(SMatrix{N, N}(spectralderivative(LobattoPoints{T, N}())))
+    end
 end
 
 ∫(f::ComboFun) = sum(map(∫, f.basis) .* f.coeffs)
@@ -236,15 +267,21 @@ end
 ∫(f::ProductFun) = prod(map(∫, f.funs))
 
 @generated function Base.map(::typeof(∫), b::LagrangeBasis{T, <:LobattoPoints{T, N}}) where {T, N}
-    return :($(SVector{N, T}(lglpoints(T, N - 1)[2])))
+    return quote
+        Base.@_inline_meta
+        return $(SVector{N, T}(lglpoints(T, N - 1)[2]))
+    end
 end
 
-function Base.map(::typeof(∫), b::ProductBasis{T, N}) where {T, N}
-    return prod.(collect(product((map(∫, basis) for basis in b.bases)...)))
+@inline function Base.map(::typeof(∫), b::ProductBasis{T, N}) where {T, N}
+    return map(prod, collect(product(ntuple(n->map(∫, b.bases[n]), N)...)))
 end
 
 @generated function ∫(f::LagrangeFun{T, <:LobattoPoints{T, N}}) where {T, N}
-    return :($(SVector{N, T}(lglpoints(T, N - 1)[2]))[f.n])
+    return quote
+        Base.@_inline_meta
+        return $(SVector{N, T}(lglpoints(T, N - 1)[2]))[f.n]
+    end
 end
 
 ∇(f::ComboFun) = sum(map(∇, f.basis) .* f)
@@ -264,7 +301,7 @@ end
 
 function ∇(f::ComboFun{T, N, <:ProductBasis}) where {T, N}
     partials = [dimsmapslices(n, c-> ∇(ComboFun(b, c)).coeffs, f.coeffs) for (n, b) in enumerate(f.basis.bases)]
-    ComboFun(f.basis, cat.(partials..., dims = ndims(T) + 1))
+    ComboFun(f.basis, dimscat.(ndims(T) + 1, partials...))
 end
 
 function ∫∇Ψ(f::ComboFun) where {T, N}
@@ -272,113 +309,31 @@ function ∫∇Ψ(f::ComboFun) where {T, N}
 end
 
 function ∫∇Ψ(f::ComboFun{<:Any, 1, <:LagrangeBasis})
-    return ComboFun(f.basis, convert(typeof(f.coeffs), D(f.basis.points)' * (map(∫, f.basis) .* f.coeffs)))
-end
-
-function ∫∇Ψ(f::ComboFun{T, N, <:ProductBasis}) where {T, N}
-    return ComboFun(f.basis, sum(dimsmapslices(n, c->∫∇Ψ(ComboFun(c)).coeffs, getindex.(f.coeffs, n)) for n in 1:N))
-end
-
-function ∫∇Ψ(f::ComboFun{<:Any, N, <:ProductBasis{<:Any, N, <:Tuple{Vararg{<:LagrangeBasis}}}}) where {N}
     ω = map(∫, f.basis)
-    return ComboFun(f.basis, (sum(dimsmapslices(n, c->D(b.points)' * c, ω.*(getindex.(f.coeffs, n))) for (n, b) in enumerate(f.basis.bases))))
+    return ComboFun(f.basis, D(f.basis.points)' * (ω .* f.coeffs))
+end
+
+function ∫∇Ψ(f::ComboFun{<:Any, 1, <:ProductBasis{<:Any, 1, <:Tuple{Vararg{<:LagrangeBasis}}}})
+    ω = map(∫, f.basis)
+    return ComboFun(f.basis, D(f.basis.bases[1].points)' * (ω .* f.coeffs))
+end
+
+function ∫∇Ψ(f::ComboFun{<:AbstractVector, 2, <:ProductBasis{<:Any, 2, <:Tuple{Vararg{<:LagrangeBasis}}}})
+    ω = map(∫, f.basis)
+    return ComboFun(f.basis, dimsmapslices(1, c->D(f.basis.bases[1].points)' * c, ω.*(getindex.(f.coeffs, 1))) +
+                             dimsmapslices(2, c->D(f.basis.bases[2].points)' * c, ω.*(getindex.(f.coeffs, 2))))
+end
+
+function ∫∇Ψ(f::ComboFun{<:AbstractMatrix, 2, <:ProductBasis{<:Any, 2, <:Tuple{Vararg{<:LagrangeBasis}}}})
+    ω = map(∫, f.basis)
+    return ComboFun(f.basis, dimsmapslices(1, c->D(f.basis.bases[1].points)' * c, ω.*(getindex.(f.coeffs, 1, :))) +
+                             dimsmapslices(2, c->D(f.basis.bases[2].points)' * c, ω.*(getindex.(f.coeffs, 2, :))))
 end
 
 function ∫Ψ(f::ComboFun)
     return ComboFun(f.basis, f.coeffs .* map(∫, f.basis))
 end
 
-#OVERRIDES
-
-dimsmapslices(dims, f, x) = mapslices(f, x; dims = dims)
-
-@inline function dimsmapslices(dims::Union{Int, Tuple}, f, x::StaticArray)
-    return _mapslices_exposition(Val(dims), f, x)
-end
-
-@generated function _mapslices_exposition(::Val{dims}, f, a) where {dims}
-    slicers = Array(collect(product((n in dims ? (:(Colon()),) : 1:size(a)[n] for n = 1:ndims(a))...)))
-    slices = map(slicer -> :(f(a[$(slicer...)])), slicers)
-    return quote
-        Base.@_inline_meta
-        _mapslices_denoument(Val(size(a)), Val(dims), $(slices...))
-    end
-end
-
-@generated function _mapslices_denoument(::Val{oldsize}, ::Val{dims}, slices::StaticArray...) where {oldsize, dims}
-    if all(isequal(size(slices[1])), map(size, slices))
-        count = 0
-        firstsize = (size(slices[1])..., ones(Int, length(oldsize))...)
-        newsize = ((n in dims ? oldsize[n] : firstsize[count+=1] for n = 1:length(oldsize))...,)
-
-        slicers = Array(collect(product((n in dims ? (:(Colon()),) : 1:newsize[n] for n = 1:length(newsize))...)))
-        thunk = quote
-            Base.@_inline_meta
-            res = @MArray zeros($(eltype(slices[1])), $(newsize...))
-        end
-        for (i, slicer) in enumerate(slicers)
-            push!(thunk.args, :(@inbounds res[$(slicer...)] = slices[$i]))
-        end
-        push!(thunk.args, :(return similar_type(slices[1], Size($(newsize...)))(res)))
-        return thunk
-    else
-        return :(throw(DimensionMismatch()))
-    end
-end
-
-#=
-
-            @inbounds return similar_type(as[1], promote_type(map(eltype, as)...), Size($(size(res)...)))(tuple($(res...)))
-
-        firstsize = (size(firstslice)..., $(ones(Int, length(oldsize))...))
-        newsize = ($((n in dims ? oldsize[n] : :(firstsize[$(count+=1)]) for n = 1:length(oldsize))...),)
-        count = 0
-
-    count = 0
-
-    return quote
-        Base.@_inline_meta
-        firstslice = $(slices[1])
-        otherslices = $(slices[2:end])
-        firstsize = $(ones(Int, ndims(a))...)
-        if firstslice isa AbstractArray
-            firstsize = (size(firstslice)..., firstsize...)
-        end
-        newsize = ($((n in dims ? size(a)[n] : :(firstsize[$(count += 1)]) for n = 1:ndims(a))...),)
-        if firstslice isa StaticArray && all(isa(StaticArray
-        return
-    end
-end
-
-    for n in 1:ndims(a)
-        if size(slices)[n] != 1
-            slices = mapslices(tube -> :(dimscat($n, $(tube...))), slices; dims=n)
-        end
-    end
-=#
-
-dimscat(dims, as...) = cat(as...; dims = dims)
-
-@inline function dimscat(dims::Union{Int, Tuple}, as::StaticArray...)
-    return _cat(Val(dims), as...)
-end
-
-@generated function _cat(::Val{dims}, as...) where {dims}
-    as = map(((n, a),)->map(i -> :(as[$n][$(Tuple(i)...)]), CartesianIndices(size(a))), enumerate(as))
-    try
-        res = cat(as..., dims=dims)
-        return quote
-            Base.@_inline_meta
-            @inbounds return similar_type(as[1], promote_type(map(eltype, as)...), Size($(size(res)...)))(tuple($(res...)))
-        end
-    catch DimensionMismatch err
-        return :(throw($err))
-    end
-end
-
-StaticArrays.SVector(i::CartesianIndex) = SVector(Tuple(i))
-
-#=
 function Base.collect(it::Base.Iterators.ProductIterator{TT}) where {TT<:Tuple{Vararg{LobattoPoints}}}
     sproduct(it.iterators)
 end
@@ -398,15 +353,6 @@ using Base.Cartesian
         @nexprs $M j->(elem_j = @ntuple $N k-> P_k[($I)[j][k]])
         @ncall $M SArray{Tuple{$(lengths...)}, Tuple{$(eltypes...)}, $N, $M} elem
     end
-end
-=#
-
-function Base.collect(it::Base.Iterators.ProductIterator{<:Tuple{Vararg{SArray}}})
-    SArray{Tuple{size(it)...},eltype(it),ndims(it),length(it)}(it...)
-end
-
-function Base.collect(it::Base.Iterators.ProductIterator{<:Tuple{Vararg{LobattoPoints}}})
-    SArray{Tuple{size(it)...},eltype(it),ndims(it),length(it)}(it...)
 end
 
 end
