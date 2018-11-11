@@ -309,37 +309,30 @@ function ∫∇Ψ(f::ComboFun) where {T, N}
 end
 
 function ∫∇Ψ(f::ComboFun{<:Any, 1, <:LagrangeBasis})
-    return ComboFun(f.basis, convert(typeof(f.coeffs), D(f.basis.points)' * (map(∫, f.basis) .* f.coeffs)))
+    ω = map(∫, f.basis)
+    return ComboFun(f.basis, D(f.basis.points)' * (ω .* f.coeffs))
 end
 
-function ∫∇Ψ(f::ComboFun{T, N, <:ProductBasis}) where {T, N}
-    return ComboFun(f.basis, sum(dimsmapslices(n, c->∫∇Ψ(ComboFun(c)).coeffs, getindex.(f.coeffs, n)) for n in 1:N))
-end
-
-#TODO generate these?
 function ∫∇Ψ(f::ComboFun{<:Any, 1, <:ProductBasis{<:Any, 1, <:Tuple{Vararg{<:LagrangeBasis}}}})
     ω = map(∫, f.basis)
-    return ComboFun(f.basis, dimsmapslices(1, c->D(f.basis.bases[1].points)' * c, ω.*(getindex.(f.coeffs, 1))))
+    return ComboFun(f.basis, D(f.basis.bases[1].points)' * (ω .* f.coeffs))
 end
 
-function ∫∇Ψ(f::ComboFun{<:Any, 2, <:ProductBasis{<:Any, 2, <:Tuple{Vararg{<:LagrangeBasis}}}})
+function ∫∇Ψ(f::ComboFun{<:AbstractVector, 2, <:ProductBasis{<:Any, 2, <:Tuple{Vararg{<:LagrangeBasis}}}})
     ω = map(∫, f.basis)
     return ComboFun(f.basis, dimsmapslices(1, c->D(f.basis.bases[1].points)' * c, ω.*(getindex.(f.coeffs, 1))) +
                              dimsmapslices(2, c->D(f.basis.bases[2].points)' * c, ω.*(getindex.(f.coeffs, 2))))
 end
 
-function ∫∇Ψ(f::ComboFun{<:Any, N, <:ProductBasis{<:Any, N, <:Tuple{Vararg{<:LagrangeBasis}}}}) where {N}
+function ∫∇Ψ(f::ComboFun{<:AbstractMatrix, 2, <:ProductBasis{<:Any, 2, <:Tuple{Vararg{<:LagrangeBasis}}}})
     ω = map(∫, f.basis)
-    return ComboFun(f.basis, (sum(dimsmapslices(n, c->D(f.basis.bases[n].points)' * c, ω.*(getindex.(f.coeffs, n))) for n in 1:N)))
+    return ComboFun(f.basis, dimsmapslices(1, c->D(f.basis.bases[1].points)' * c, ω.*(getindex.(f.coeffs, 1, :))) +
+                             dimsmapslices(2, c->D(f.basis.bases[2].points)' * c, ω.*(getindex.(f.coeffs, 2, :))))
 end
 
 function ∫Ψ(f::ComboFun)
     return ComboFun(f.basis, f.coeffs .* map(∫, f.basis))
 end
-
-#@generated function ∫Ψ(f::ComboFun{T, N, B}) where {T, N, B <:ProductBasis{<:Any, <:Any, <:Tuple{Vararg{<:LagrangeBasis{<:Any, <:LobattoPoints}}}}}
-#    return :(ComboFun(f.basis, f.coeffs .* $(map(∫, B()))))
-#end
 
 function Base.collect(it::Base.Iterators.ProductIterator{TT}) where {TT<:Tuple{Vararg{LobattoPoints}}}
     sproduct(it.iterators)

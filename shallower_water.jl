@@ -8,8 +8,26 @@ using LinearAlgebra
 using Test
 using MPI
 
+const RKA = (Float64(0),
+             Float64(-567301805773)  / Float64(1357537059087),
+             Float64(-2404267990393) / Float64(2016746695238),
+             Float64(-3550918686646) / Float64(2091501179385),
+             Float64(-1275806237668) / Float64(842570457699 ))
+
+const RKB = (Float64(1432997174477) / Float64(9575080441755 ),
+             Float64(5161836677717) / Float64(13612068292357),
+             Float64(1720146321549) / Float64(2090206949498 ),
+             Float64(3134564353537) / Float64(4481467310338 ),
+             Float64(2277821191437) / Float64(14882151754819))
+
+const RKC = (Float64(0),
+             Float64(1432997174477) / Float64(9575080441755),
+             Float64(2526269341429) / Float64(6820363962896),
+             Float64(2006345519317) / Float64(3224310063776),
+             Float64(2802321613138) / Float64(2924317926251))
+
 const dim = 2
-const order = 4
+const order = 3
 
 if Base.find_package("GPUMeshing") !== nothing
     using GPUMeshing
@@ -88,27 +106,11 @@ end
 
 function compute(tend, mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, gravity, X⃗, dX⃗, Î, Ψ, Jfaces, M)
     ## Probably T instead of Float64?
-    RKA = (Float64(0),
-           Float64(-567301805773)  / Float64(1357537059087),
-           Float64(-2404267990393) / Float64(2016746695238),
-           Float64(-3550918686646) / Float64(2091501179385),
-           Float64(-1275806237668) / Float64(842570457699 ))
 
-    RKB = (Float64(1432997174477) / Float64(9575080441755 ),
-           Float64(5161836677717) / Float64(13612068292357),
-           Float64(1720146321549) / Float64(2090206949498 ),
-           Float64(3134564353537) / Float64(4481467310338 ),
-           Float64(2277821191437) / Float64(14882151754819))
-
-    RKC = (Float64(0),
-           Float64(1432997174477) / Float64(9575080441755),
-           Float64(2526269341429) / Float64(6820363962896),
-           Float64(2006345519317) / Float64(3224310063776),
-           Float64(2802321613138) / Float64(2924317926251))
-
-    dt = 0.001
-    nsteps = ceil(Int64, tend / dt)
-    dt = tend / nsteps
+    dt = 0.0025
+    nsteps = 4
+    #nsteps = ceil(Int64, tend / dt)
+    #dt = tend / nsteps
 
     sync_storage!(mesh, h)
     sync_storage!(mesh, bathymetry)
@@ -128,7 +130,6 @@ function compute(tend, mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, gravity, X⃗,
                 ΔU⃗[elem]  += ∫∇Ψ(dX⃗ * fluxU⃗ * J)
             end
 
-            # Flux integral
             overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
                 myΔh = ComboFun(Δh[elem].basis, MArray(Δh[elem].coeffs))
                 myΔU⃗ = ComboFun(ΔU⃗[elem].basis, MArray(ΔU⃗[elem].coeffs))
@@ -143,7 +144,6 @@ function compute(tend, mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, gravity, X⃗,
                     u⃗         = U⃗[elem][face] / ht
                     fluxh     = U⃗[elem][face]
                     fluxU⃗     = (u⃗ * u⃗' * ht) + I * gravity * (0.5 * hs^2 + hs * hb)
-                    λ         = abs(normal(face)' * u⃗) + sqrt(gravity * hs)
 
                     hs′ = h[elem′][face′]
                     hb′ = bathymetry[elem′][face′]
@@ -152,10 +152,10 @@ function compute(tend, mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, gravity, X⃗,
                     u⃗′         = U⃗[elem′][face′] / ht′
                     fluxh′     = U⃗[elem′][face′]
                     fluxU⃗′     = (u⃗′ * u⃗′' * ht′) + I * gravity * (0.5 * hs′^2 + hs′ * hb′)
-                    λ′         = abs(normal(face′)' * u⃗′) + sqrt(gravity * hs′)
 
-                    myΔh[face] -= ∫Ψ(((fluxh + fluxh′)' * normal(face) - (max( λ, λ′ ) * (hs′ - hs)) / 2) * Jface)
-                    myΔU⃗[face] -= ∫Ψ(((fluxU⃗ + fluxU⃗′)' * normal(face) - (max( λ, λ′ ) * (U⃗[elem′][face′] - U⃗[elem][face])) / 2) * Jface)
+                    λ         = max(abs(normal(face)' * u⃗) + sqrt(gravity * ht), abs(normal(face)' * u⃗′) + sqrt(gravity * ht′))
+                    myΔh[face]  -= ∫Ψ(((fluxh + fluxh′)' * normal(face) - (λ * (hs′ - hs))) / 2 * Jface)
+                    myΔU⃗[face] -= ∫Ψ(((fluxU⃗ + fluxU⃗′)' * normal(face) - (λ * (U⃗[elem′][face′] - U⃗[elem][face]))) / 2 * Jface)
                 end
                 Δh[elem] = ComboFun(myΔh.basis, SArray(myΔh.coeffs))
                 ΔU⃗[elem] = ComboFun(myΔU⃗.basis, SArray(myΔU⃗.coeffs))
@@ -166,9 +166,10 @@ function compute(tend, mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, gravity, X⃗,
                 ## Assuming advection == false
                 h[elem] += RKB[s] * dt * Δh[elem] / M
                 U⃗[elem] += RKB[s] * dt * ΔU⃗[elem] / M
-                Δh[elem] *= RKA[s]
-                ΔU⃗[elem] *= RKA[s]
+                Δh[elem] *= RKA[s%length(RKA)+1]
+                ΔU⃗[elem] *= RKA[s%length(RKA)+1]
             end
+
         end
     end
 end
