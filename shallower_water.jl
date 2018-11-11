@@ -19,7 +19,13 @@ else
 end
 
 function main(tend=0.32, backend=backend)
-    mesh = PeriodicCartesianMesh(ntuple(i-> 1:10, dim); backend=backend)
+    params = setup(backend)
+    compute(tend, params...)
+end
+
+function setup(backend)
+    # Create a CPU mesh
+    mesh = PeriodicCartesianMesh(ntuple(i-> 1:10, dim))
 
     # the whole mesh will go from X⃗₀ to X⃗₁
     # (to add a vector arrow to a quantity like `v⃗`, type `v\vec` and then press tab.)
@@ -44,7 +50,6 @@ function main(tend=0.32, backend=backend)
     X⃗      = map(i -> MultilinearFun(I⃗⁻¹(i), I⃗⁻¹(i + Î), (-1.0, -1.0), (1.0, 1.0)), mesh)
 
     # Here is where we construct our basis. In our case, we've chosen an order 3 Lagrange basis over 3 + 1 Lobatto points
-
     Ψ = ProductBasis(ntuple(i->LagrangeBasis(LobattoPoints(order)), dim)...)
 
     # Set initial conditions
@@ -62,6 +67,19 @@ function main(tend=0.32, backend=backend)
     gravity    = 10.0
     #sJ         = det(∇(X⃗⁻¹[1][face]))
 
+    elem₁ = first(elems(mesh))
+    faces₁ = faces(elem₁, mesh)
+    Jfaces = SVector{length(faces₁)}([norm(∇(X⃗[elem₁][face])(zero(Î))) for face in faces₁])
+
+    M = ∫Ψ(approximate(x⃗ -> J, Ψ))
+
+    params = (mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, gravity, X⃗, dX⃗, Î, Ψ, Jfaces, M)
+
+    # todo adapt to backend and reconstruct mesh
+    return params
+end
+
+function compute(tend, mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, gravity, X⃗, dX⃗, Î, Ψ, Jfaces, M)
 
     ## Probably T instead of Float64?
     RKA = (Float64(0),
@@ -83,11 +101,12 @@ function main(tend=0.32, backend=backend)
            Float64(2802321613138) / Float64(2924317926251))
 
     dt = 0.001
-
     nsteps = ceil(Int64, tend / dt)
     dt = tend / nsteps
     for step in 1:nsteps
         for s in 1:length(RKA)
+
+            # Volume integral
             overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
                 #function volumerhs!(rhs, Q::NamedTuple{S, NTuple{3, T}}, bathymetry, metric, D, ω, elems, gravity, δnl) where {S, T}
                 ht         = h[elem] + bathymetry[elem]
@@ -98,10 +117,7 @@ function main(tend=0.32, backend=backend)
                 ΔU⃗[elem]  += ∫∇Ψ(dX⃗ * fluxU⃗ * J)
             end
 
-            elem₁ = first(elems(mesh))
-            faces₁ = faces(elem₁, mesh)
-            Jfaces = SVector{length(faces₁)}([norm(∇(X⃗[elem₁][face])(zero(Î))) for face in faces₁])
-
+            # Flux integral
             overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
                 myΔh = ComboFun(Δh[elem].basis, MArray(Δh[elem].coeffs))
                 myΔU⃗ = ComboFun(ΔU⃗[elem].basis, MArray(ΔU⃗[elem].coeffs))
@@ -134,7 +150,7 @@ function main(tend=0.32, backend=backend)
                 ΔU⃗[elem] = ComboFun(myΔU⃗.basis, SArray(myΔU⃗.coeffs))
             end
 
-            M = ∫Ψ(approximate(x⃗ -> J, Ψ))
+            # Update steps
             overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
                 ## Assuming advection == false
                 h[elem] += RKB[s] * dt * Δh[elem] / M
