@@ -8,7 +8,7 @@ using LinearAlgebra
 using Test
 
 const dim = 2
-const order = 4
+const order = 3
 
 if Base.find_package("GPUMeshing") !== nothing
     using GPUMeshing
@@ -83,7 +83,7 @@ function main(backend=backend)
            Float64(2802321613138) / Float64(2924317926251))
 
     dt = 0.0025
-    nsteps = 2
+    nsteps = 4
     #nsteps = ceil(Int64, tend / dt)
     #dt = tend / nsteps
     for step in 1:nsteps
@@ -95,12 +95,21 @@ function main(backend=backend)
                 fluxh      = U⃗[elem]
                 Δh[elem]  += ∫∇Ψ(dX⃗ * fluxh * J)
                 fluxU⃗      = (u⃗ * u⃗' * ht) + I * gravity * (0.5 * h[elem]^2 + h[elem] * bathymetry[elem])
-                ΔU⃗[elem]  += ∫∇Ψ(dX⃗ * fluxU⃗ * J)
+
+                ## JUST FOR NOW BECAUSE ∫∇Ψ 2D Version has bug
+                fU1         = fluxU⃗*SVector(1.0, 0.0)
+                fU2         = fluxU⃗*SVector(0.0, 1.0)
+                dU1 = ∫∇Ψ(dX⃗ * fU1 * J)
+                dU2 = ∫∇Ψ(dX⃗ * fU2 * J)
+                ΔU⃗[elem]  += SVector(1.0, 0.0)*dU1 + SVector(0.0, 1.0)*dU2
+
+                ## IF Fixed we just use this instead of line 100-104
+                #ΔU⃗[elem]  += ∫∇Ψ(dX⃗ * fluxU⃗ * J)
             end
 
             elem₁ = first(elems(mesh))
             faces₁ = faces(elem₁, mesh)
-            Jfaces = SVector{length(faces₁)}([norm(∇(X⃗[elem₁][face])(zero(Î))) for face in faces₁])
+            Jfaces = SVector{length(faces₁)}([norm(∇(X⃗⁻¹[elem₁][face])(zero(Î))) for face in faces₁])
 
             overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
                 myΔh = ComboFun(Δh[elem].basis, MArray(Δh[elem].coeffs))
@@ -116,7 +125,6 @@ function main(backend=backend)
                     u⃗         = U⃗[elem][face] / ht
                     fluxh     = U⃗[elem][face]
                     fluxU⃗     = (u⃗ * u⃗' * ht) + I * gravity * (0.5 * hs^2 + hs * hb)
-                    λ         = abs(normal(face)' * u⃗) + sqrt(gravity * hs)
 
                     hs′ = h[elem′][face′]
                     hb′ = bathymetry[elem′][face′]
@@ -125,10 +133,10 @@ function main(backend=backend)
                     u⃗′         = U⃗[elem′][face′] / ht′
                     fluxh′     = U⃗[elem′][face′]
                     fluxU⃗′     = (u⃗′ * u⃗′' * ht′) + I * gravity * (0.5 * hs′^2 + hs′ * hb′)
-                    λ′         = abs(normal(face′)' * u⃗′) + sqrt(gravity * hs′)
 
-                    myΔh[face] -= ∫Ψ(((fluxh + fluxh′)' * normal(face) - (max( λ, λ′ ) * (hs′ - hs)) / 2) * Jface)
-                    myΔU⃗[face] -= ∫Ψ(((fluxU⃗ + fluxU⃗′)' * normal(face) - (max( λ, λ′ ) * (U⃗[elem′][face′] - U⃗[elem][face])) / 2) * Jface)
+                    λ         = max(abs(normal(face)' * u⃗) + sqrt(gravity * ht), abs(normal(face)' * u⃗′) + sqrt(gravity * ht′))
+                    myΔh[face]  -= ∫Ψ(((fluxh + fluxh′)' * normal(face) - (λ * (hs′ - hs))) / 2 * Jface)
+                    myΔU⃗[face] -= ∫Ψ(((fluxU⃗ + fluxU⃗′)' * normal(face) - (λ * (U⃗[elem′][face′] - U⃗[elem][face]))) / 2 * Jface)
                 end
                 Δh[elem] = ComboFun(myΔh.basis, SArray(myΔh.coeffs))
                 ΔU⃗[elem] = ComboFun(myΔU⃗.basis, SArray(myΔU⃗.coeffs))
@@ -139,9 +147,10 @@ function main(backend=backend)
                 ## Assuming advection == false
                 h[elem] += RKB[s] * dt * Δh[elem] / M
                 U⃗[elem] += RKB[s] * dt * ΔU⃗[elem] / M
-                Δh[elem] *= RKA[s]
-                ΔU⃗[elem] *= RKA[s]
+                Δh[elem] *= RKA[s%length(RKA)+1]
+                ΔU⃗[elem] *= RKA[s%length(RKA)+1]
             end
+
         end
     end
 end
