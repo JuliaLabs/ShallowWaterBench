@@ -37,7 +37,7 @@ function flush_recvbufs!(a::BufferedArray, mesh::LocalCartesianMesh)
 end
 
 function fill_sendbufs!(a::BufferedArray, mesh::LocalCartesianMesh)
-    for (bidx, buf) in zip(ghostboundaries(mesh), a.recv_buffers)
+    for (bidx, buf) in zip(boundaries(mesh), a.send_buffers)
         buf .= a[bidx]
     end
 end
