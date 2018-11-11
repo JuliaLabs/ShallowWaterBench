@@ -109,6 +109,8 @@ Base.IteratorSize(::CartesianNeighbors) = Base.HasShape{1}()
 Base.eltype(cn::CartesianNeighbors{N}) where N = CartesianIndex{N}
 Base.map(f::F, cn::CartesianNeighbors{N}) where {F,N} = ntuple(i->f(cn[i]), 2N)
 
+opposite(face, elem, mesh::CartesianMesh) = -face
+
 """
     PeriodicCartesianMesh{N, B} <: CartesianMesh{N, B}
 
@@ -128,8 +130,6 @@ elems(mesh::PeriodicCartesianMesh) = mesh.inds
 
 Base.mod(x::T, y::AbstractUnitRange{T}) where {T<:Integer} = y[mod1(x - y[1] + 1, length(y))]
 Base.mod(x::CartesianIndex{N}, y::CartesianIndices{N}) where {N} = CartesianIndex(ntuple(n->mod(x[n], axes(y)[n]), N))
-
-opposite(face, elem, mesh::PeriodicCartesianMesh) = -face
 
 neighbor(elem, face, mesh::PeriodicCartesianMesh) =
     (elem + face) in mesh.inds ? elem + face : mod(elem + face, mesh.inds)
