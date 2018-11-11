@@ -162,42 +162,66 @@ end
 =#
 
 normal(face::CartesianIndex) = SVector(face)
+import SimpleMeshing.Meshing: CartesianNeighbor
+normal(face::CartesianNeighbor) = normal(convert(CartesianIndex, face))
 
-@generated function Base.getindex(f::ComboFun{<:Any, N, <:ProductBasis}, I::CartesianIndex{N}) where {N}
-    thunk = quote
-        Base.@_inline_meta
-    end
-    for dim in 1:N
-        for (offset, select) in ((-1, 1), (1, :end))
-            push!(thunk.args, quote
-                if I == CartesianIndex($(ntuple(n->n == dim ? offset : 0, N)...))
-                    basis = ProductBasis($(ntuple(n->:(f.basis.bases[$(n >= dim ? n + 1 : n)]), N - 1)...))
-                    coeffs = f.coeffs[$(ntuple(n->n == dim ? select : :(:), N)...)]
-                    return ComboFun(basis, coeffs)
-                end
-            end)
-        end
-    end
-    return thunk
+@inline function getfaceindices(::Val{lI}, faceidx::CartesianNeighbor{N, I}) where {lI, N, I}
+    ind = Tuple(convert(CartesianIndex, faceidx))
+    dim = mod1(I, N) # non-zero dimension in ind
+    basisind = ntuple(n->n >= dim ? n + 1 : n, Val(N - 1))
+    coeffsind = ntuple(n -> I[n] == 0 ? Colon() : (I[n] == 1 ? lI : 1), Val(N))
+    return basisind, coeffsind
 end
 
-@generated function Base.setindex!(f::ComboFun{<:Any, N, <:ProductBasis}, g::ComboFun{<:Any, M, <:ProductBasis}, I::CartesianIndex{N}) where {N, M}
-    thunk = quote
-        Base.@_inline_meta
-    end
-    for dim in 1:N
-        for (offset, select) in ((-1, 1), (1, :end))
-            push!(thunk.args, quote
-                if I == CartesianIndex($(ntuple(n->n == dim ? offset : 0, N)...))
-                    DEBUG && @assert ProductBasis($(ntuple(n->:(f.basis.bases[$(n >= dim ? n + 1 : n)]), N - 1)...)) == g.basis
-                    f.coeffs[$(ntuple(n->n == dim ? select : :(:), N)...)] = g.coeffs
-                    return f
-                end
-            end)
-        end
-    end
-    return thunk
+@inline function Base.getindex(f::ComboFun{<:Any, N, <:ProductBasis}, faceidx::CartesianNeighbor{N, I}) where {N, I}
+    basisind, coeffsind = getfaceindices(Val(lastindex(f.coeffs)), faceidx)
+    basis = ProductBasis(basis.bases[basisind...]...)
+    coeffs = f.coeffs[coeffsind...]
+    return ComboFun(basis, coeffs)
 end
+
+function Base.setindex!(f::ComboFun{<:Any, N, <:ProductBasis}, g::ComboFun{<:Any, M, <:ProductBasis}, faceidx::CartesianNeighbor{N, I}) where {N, M, I}
+    basisind, coeffsind = getfaceindices(Val(lastindex(f.coeffs)), faceidx)
+    DEBUG && @assert ProductBasis(f.basis.bases[basisind...]...) == g.basis
+    f.coeffs[coeffsind...] = g.coeffs
+    return f
+end
+
+# @generated function Base.getindex(f::ComboFun{<:Any, N, <:ProductBasis}, I::CartesianIndex{N}) where {N}
+#     thunk = quote
+#         Base.@_inline_meta
+#     end
+#     for dim in 1:N
+#         for (offset, select) in ((-1, 1), (1, :end))
+#             push!(thunk.args, quote
+#                 if I == CartesianIndex($(ntuple(n->n == dim ? offset : 0, N)...))
+#                     basis = ProductBasis($(ntuple(n->:(f.basis.bases[$(n >= dim ? n + 1 : n)]), N - 1)...))
+#                     coeffs = f.coeffs[$(ntuple(n->n == dim ? select : :(:), N)...)]
+#                     return ComboFun(basis, coeffs)
+#                 end
+#             end)
+#         end
+#     end
+#     return thunk
+# end
+
+# @generated function Base.setindex!(f::ComboFun{<:Any, N, <:ProductBasis}, g::ComboFun{<:Any, M, <:ProductBasis}, I::CartesianIndex{N}) where {N, M}
+#     thunk = quote
+#         Base.@_inline_meta
+#     end
+#     for dim in 1:N
+#         for (offset, select) in ((-1, 1), (1, :end))
+#             push!(thunk.args, quote
+#                 if I == CartesianIndex($(ntuple(n->n == dim ? offset : 0, N)...))
+#                     DEBUG && @assert ProductBasis($(ntuple(n->:(f.basis.bases[$(n >= dim ? n + 1 : n)]), N - 1)...)) == g.basis
+#                     f.coeffs[$(ntuple(n->n == dim ? select : :(:), N)...)] = g.coeffs
+#                     return f
+#                 end
+#             end)
+#         end
+#     end
+#     return thunk
+# end
 
 #The minimum-degree polynomial function which is 1 at the nth point and 0 at the other points
 struct LagrangeFun{T, P <: AbstractVector{T}} <: Fun{T, 1}
