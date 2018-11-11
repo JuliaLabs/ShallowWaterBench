@@ -94,7 +94,7 @@ function setup(backend)
 
     elem₁ = first(elems(mesh))
     faces₁ = faces(elem₁, mesh)
-    Jfaces = SVector{length(faces₁)}([norm(∇(X⃗[elem₁][face])(zero(Î))) for face in faces₁])
+    Jfaces = SVector{length(faces₁)}([norm(∇(X⃗⁻¹[elem₁][face])(zero(Î))) for face in faces₁])
 
     M = ∫Ψ(approximate(x⃗ -> J, Ψ))
 
@@ -105,7 +105,6 @@ function setup(backend)
 end
 
 function compute(tend, mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, gravity, X⃗, dX⃗, Î, Ψ, Jfaces, M)
-    ## Probably T instead of Float64?
 
     dt = 0.0025
     nsteps = 4
@@ -130,6 +129,7 @@ function compute(tend, mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, gravity, X⃗,
                 ΔU⃗[elem]  += ∫∇Ψ(dX⃗ * fluxU⃗ * J)
             end
 
+            # Flux integral
             overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
                 myΔh = ComboFun(Δh[elem].basis, MArray(Δh[elem].coeffs))
                 myΔU⃗ = ComboFun(ΔU⃗[elem].basis, MArray(ΔU⃗[elem].coeffs))
