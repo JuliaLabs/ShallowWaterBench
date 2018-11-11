@@ -1,7 +1,9 @@
 using MPI
+using ..Partitions
 
-export BufferedArray, localpart, neighbor_ranks, fill_sendbufs!,
-       flush_recvbufs!, async_send!, async_recv!, wait_send, wait_recv
+export BufferedArray, localpart, neighbor_ranks, sync_storage!,
+       fill_sendbufs!, flush_recvbufs!, async_send!, async_recv!,
+       wait_send, wait_recv
 
 # TODO: get rid of this type and store all buffers in the LocalCartesianMesh?
 
@@ -42,31 +44,32 @@ end
 
 const mpicomm = MPI.COMM_WORLD
 
-function async_send!(a::BufferedArray, mesh::LocalCartesianMesh)
+function async_send!(a::BufferedArray, mesh::LocalCartesianMesh, tag)
 
     fill_sendbufs!(a, mesh)
 
     for i in 1:length(mesh.neighbor_ranks)
-        a.send_reqs[i] = MPI.Isend(a.send_buffers[i], mesh.neighbor_ranks[i], 777, mpicomm)
+        a.send_reqs[i] = MPI.Isend(a.send_buffers[i], mesh.neighbor_ranks[i], tag, mpicomm)
     end
 end
 
 wait_send(a::BufferedArray) = MPI.Waitall!(a.send_reqs)
 
-function async_recv!(a::BufferedArray, mesh::LocalCartesianMesh)
-
+function async_recv!(a::BufferedArray, mesh::LocalCartesianMesh, tag)
     for i in 1:length(mesh.neighbor_ranks)
-        a.recv_reqs[i] = MPI.Irecv!(a.recv_buffers[i], mesh.neighbor_ranks[i], 777, mpicomm)
+        a.recv_reqs[i] = MPI.Irecv!(a.recv_buffers[i], mesh.neighbor_ranks[i], tag, mpicomm)
     end
+end
 
+function wait_recv(a::BufferedArray, mesh)
+    MPI.Waitall!(a.recv_reqs)
     flush_recvbufs!(a, mesh)
 end
 
-wait_recv(a::BufferedArray) = MPI.Waitall!(a.recv_reqs)
-
 elems(mesh::LocalCartesianMesh) = elems(mesh.mesh)
-neighbor(elem, face, mesh::LocalCartesianMesh) = neighbor(elem, face, mesh)
+neighbor(elem, face, mesh::LocalCartesianMesh) = neighbor(elem, face, mesh.mesh)
 overelems(f, mesh::LocalCartesianMesh, args...) = overelems(f, mesh.mesh, args...)
+ghostboundaries(mesh::LocalCartesianMesh) = ghostboundaries(mesh.mesh)
 
 function storage(::Type{T}, mesh::LocalCartesianMesh{N, CPU}) where {T, N}
     bs = ghostboundaries(mesh)
@@ -76,7 +79,7 @@ function storage(::Type{T}, mesh::LocalCartesianMesh{N, CPU}) where {T, N}
     recv_reqs = fill(MPI.REQUEST_NULL, length(bs))
     send_reqs = fill(MPI.REQUEST_NULL, length(bs))
 
-    BufferedArray(storage(T, mesh), recv_bufs, send_bufs, recv_reqs, send_reqs)
+    BufferedArray(storage(T, mesh.mesh), recv_bufs, send_bufs, recv_reqs, send_reqs)
 end
 
 """
@@ -88,17 +91,46 @@ to `st` BufferedArray.
 sync_storage!(mesh::LocalCartesianMesh, st::BufferedArray) = push!(mesh.synced_storage, st)
 
 function async_send!(m::LocalCartesianMesh)
-    for s in m.synced_storage
-        async_send!(s, m, m.neighbor_ranks)
+    for (i, s) in enumerate(m.synced_storage)
+        async_send!(s, m, 666+i)
     end
 end
 
 function async_recv!(m::LocalCartesianMesh)
-    for s in m.synced_storage
-        async_recv!(s, m, m.neighbor_ranks)
+    for (i, s) in enumerate(m.synced_storage)
+        async_recv!(s, m, 666+i)
     end
 end
 
-wait_recv(m::LocalCartesianMesh) = forach(wait_recv, m.synced_storage)
-wait_send(m::LocalCartesianMesh) = forach(wait_send, m.synced_storage)
+function wait_recv(m::LocalCartesianMesh)
+    for b in m.synced_storage
+        wait_recv(b, m)
+    end
+end
+wait_send(m::LocalCartesianMesh) = foreach(wait_send, m.synced_storage)
 
+"""
+    localpart(globalMesh, mpicomm[, ranks=[1:MPI.Comm_size(mpicomm);]'])
+
+Create a localpart of a global mesh
+
+# Arguments
+
+- `globalMesh`: usually a `PeriodicCartesianMesh`
+- `mpicomm`: MPI.MPIComm object
+- `ranks`: an array showing rank layout. Defaults to [1 2 ... N] where N is the number of workers in mpicomm's pool.
+
+# Returns
+
+a `LocalCartesianMesh` wrapping a `GhostCartesianMesh` with indices offset to represent local part
+in the global mesh.
+"""
+function localpart(globalMesh, mpicomm, ranks=convert(Array, (0:MPI.Comm_size(mpicomm)-1)'))
+    P = CartesianPartition(elems(globalMesh), ranks)
+    inds = rankindices(P, MPI.Comm_rank(mpicomm))
+    mesh = GhostCartesianMesh(CPU(), inds) # TODO: GPU??!
+    nbs = map(ghostboundaries(mesh), boundaries(mesh)) do ghostelems, elems
+        locate(P, translate(globalMesh, ghostelems))
+    end
+    LocalCartesianMesh(mesh, nbs, [])
+end
