@@ -143,10 +143,12 @@ elems(mesh::PeriodicCartesianMesh) = mesh.inds
 Base.mod(x::T, y::AbstractUnitRange{T}) where {T<:Integer} = y[mod1(x - y[1] + 1, length(y))]
 Base.mod(x::CartesianIndex{N}, y::CartesianIndices{N}) where {N} = CartesianIndex(ntuple(n->mod(x[n], axes(y)[n]), N))
 
-opposite(face, elem, mesh::PeriodicCartesianMesh) = -face
+opposite(face::CartesianNeighbor{N, I}, elem, mesh::PeriodicCartesianMesh) where {I, N} = CartesianNeighbor{N, mod1(I+N,N)}()
 
-neighbor(elem, face, mesh::PeriodicCartesianMesh) =
+function neighbor(elem, face, mesh::PeriodicCartesianMesh)
+    face = convert(CartesianIndex, face)
     (elem + face) in mesh.inds ? elem + face : mod(elem + face, mesh.inds)
+end
 
 function overelems(f::F, mesh::PeriodicCartesianMesh{N, CPU}, args...) where {F, N}
     for I in elems(mesh)

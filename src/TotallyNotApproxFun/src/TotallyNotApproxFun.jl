@@ -165,24 +165,25 @@ normal(face::CartesianIndex) = SVector(face)
 import SimpleMeshing.Meshing: CartesianNeighbor
 normal(face::CartesianNeighbor) = normal(convert(CartesianIndex, face))
 
-@inline function getfaceindices(::Val{lI}, faceidx::CartesianNeighbor{N, I}) where {lI, N, I}
+@inline function getfaceindices(coeffs, faceidx::CartesianNeighbor{N, I}) where {lI, N, I}
     ind = Tuple(convert(CartesianIndex, faceidx))
     dim = mod1(I, N) # non-zero dimension in ind
+    lI = lastindex(coeffs, dim)
     basisind = ntuple(n->n >= dim ? n + 1 : n, Val(N - 1))
-    coeffsind = ntuple(n -> I[n] == 0 ? Colon() : (I[n] == 1 ? lI : 1), Val(N))
+    coeffsind = ntuple(n -> ind[n] == 0 ? Colon() : (ind[n] == 1 ? lI : 1), Val(N))
     return basisind, coeffsind
 end
 
 @inline function Base.getindex(f::ComboFun{<:Any, N, <:ProductBasis}, faceidx::CartesianNeighbor{N, I}) where {N, I}
-    basisind, coeffsind = getfaceindices(Val(lastindex(f.coeffs)), faceidx)
-    basis = ProductBasis(basis.bases[basisind...]...)
+    basisind, coeffsind = getfaceindices(f.coeffs, faceidx)
+    basis = ProductBasis(ntuple(i->f.basis.bases[basisind[i]], Val(N-1))...)
     coeffs = f.coeffs[coeffsind...]
     return ComboFun(basis, coeffs)
 end
 
 function Base.setindex!(f::ComboFun{<:Any, N, <:ProductBasis}, g::ComboFun{<:Any, M, <:ProductBasis}, faceidx::CartesianNeighbor{N, I}) where {N, M, I}
-    basisind, coeffsind = getfaceindices(Val(lastindex(f.coeffs)), faceidx)
-    DEBUG && @assert ProductBasis(f.basis.bases[basisind...]...) == g.basis
+    basisind, coeffsind = getfaceindices(f.coeffs, faceidx)
+    DEBUG && @assert ProductBasis(ntuple(i->f.basis.bases[basisind[i]], Val(N-1))...) == g.basis
     f.coeffs[coeffsind...] = g.coeffs
     return f
 end
