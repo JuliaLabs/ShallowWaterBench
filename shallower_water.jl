@@ -88,7 +88,7 @@ function setup(backend)
     U⃗          = myapproximate(x⃗ -> zero(x⃗))
     Δh         = myapproximate(x⃗ -> zero(eltype(x⃗)))
     ΔU⃗         = myapproximate(x⃗ -> zero(x⃗))
-    dX⃗         = ∇(X⃗[1])(zero(Î))
+    dX⃗         = ∇(X⃗[I⃗₀])(zero(Î))
     J          = inv(det(dX⃗))
     gravity    = 10.0
     #sJ         = det(∇(X⃗⁻¹[1][face]))
