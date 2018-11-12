@@ -214,7 +214,7 @@ function boundaries(mesh::CartesianMesh{N}) where N
 
     fs = faces(fI, mesh)
 
-    Tuple(ntuple(Val(N)) do i
+    Tuple(CartesianIndices(ntuple(Val(N)) do i
         if f[i] == -1
             fI[i]
         elseif f[i] == 1
@@ -222,7 +222,7 @@ function boundaries(mesh::CartesianMesh{N}) where N
         else
             fI[i]:lI[i]
         end
-    end for f in fs)
+    end) for f in fs)
 end
 
 """
@@ -236,7 +236,7 @@ function ghostboundaries(mesh::GhostCartesianMesh{N}) where N
 
     fs = faces(fI, mesh)
 
-    Tuple(ntuple(Val(N)) do i
+    Tuple(CartesianIndices(ntuple(Val(N)) do i
         if f[i] == -1
             fI[i]-1
         elseif f[i] == 1
@@ -244,7 +244,7 @@ function ghostboundaries(mesh::GhostCartesianMesh{N}) where N
         else
             fI[i]:lI[i]
         end
-    end for f in fs)
+    end) for f in fs)
 end
 
 include("mpi_mesh.jl")
