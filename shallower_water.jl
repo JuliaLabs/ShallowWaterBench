@@ -116,13 +116,17 @@ end
 
 function compute(tend, mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, gravity, X⃗, dX⃗, Î, Ψ, Jfaces, M)
 
-    dt = 0.0025
-    nsteps = 4
-    #nsteps = ceil(Int64, tend / dt)
-    #dt = tend / nsteps
+    dt = 0.001
+    nsteps = ceil(Int64, tend / dt)
+    dt = tend / nsteps
 
     for step in 1:nsteps
         for s in 1:length(RKA)
+
+            async_send!(mesh)
+            async_recv!(mesh)
+            # Flux integral
+            wait_send(mesh) # iter=1 this is a noop
 
             # Volume integral
             overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
@@ -135,10 +139,6 @@ function compute(tend, mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, gravity, X⃗,
                 ΔU⃗[elem]  += ∫∇Ψ(dX⃗ * fluxU⃗ * J)
             end
 
-            async_send!(mesh)
-            async_recv!(mesh)
-            # Flux integral
-            wait_send(mesh) # iter=1 this is a noop
             wait_recv(mesh) # fill in data from previous iteration
 
             open(io->serialize(io, h), "testdata/h$step-$s.jls", "w")
