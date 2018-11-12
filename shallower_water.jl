@@ -183,10 +183,6 @@ function compute(tend, mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, gravity, X⃗,
             end
             end
         end
-        if floor(Int, 8/(10 / MPI.Comm_size(mpicomm))) == MPI.Comm_rank(mpicomm)
-            @show h[8,8].coeffs
-            @show getindex.(U⃗[8,8].coeffs, 2)
-        end
     end
 end
 
