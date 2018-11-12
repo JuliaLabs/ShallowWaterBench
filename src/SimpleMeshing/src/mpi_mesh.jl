@@ -1,11 +1,9 @@
 using MPI
 using ..Partitions
 
-export BufferedArray, localpart, neighbor_ranks, sync_storage!,
+export localpart, neighbor_ranks, sync_ghost!,
        fill_sendbufs!, flush_recvbufs!, async_send!, async_recv!,
        wait_send, wait_recv
-
-# TODO: get rid of this type and store all buffers in the LocalCartesianMesh?
 
 """
     LocalCartesianMesh(G, neighbors)
@@ -16,98 +14,83 @@ struct LocalCartesianMesh{N, B, G<:CartesianMesh{N, B}} <: CartesianMesh{N, B}
     synced_storage::Vector{Any}
 end
 
-struct BufferedArray{T, N, A<:AbstractArray{T,N}} <: AbstractArray{T,N}
-    arr::A
-    recv_buffers::Tuple
-    send_buffers::Tuple
-    recv_reqs::Vector{MPI.Request}
-    send_reqs::Vector{MPI.Request}
-end
-
-Base.size(a::BufferedArray) = size(a.arr)
-Base.getindex(a::BufferedArray, idx...) = a.arr[idx...]
-Base.setindex!(a::BufferedArray, val, idx...) = a.arr[idx...] = val
-Base.axes(a::BufferedArray) = axes(a.arr) # now includes offsets
-Base.IndexStyle(a::BufferedArray) = IndexStyle(a.arr)
-
-function flush_recvbufs!(a::BufferedArray, mesh::LocalCartesianMesh)
-    for (bidx, buf) in zip(ghostboundaries(mesh), a.recv_buffers)
-        a[bidx] .= buf
-    end
-end
-
-function fill_sendbufs!(a::BufferedArray, mesh::LocalCartesianMesh)
-    for (bidx, buf) in zip(boundaries(mesh), a.send_buffers)
-        buf .= a[bidx]
-    end
-end
-
 const mpicomm = MPI.COMM_WORLD
-
-function async_send!(a::BufferedArray, mesh::LocalCartesianMesh, tag)
-
-    fill_sendbufs!(a, mesh)
-
-    for i in 1:length(mesh.neighbor_ranks)
-        a.send_reqs[i] = MPI.Isend(a.send_buffers[i], mesh.neighbor_ranks[i], tag, mpicomm)
-    end
-end
-
-wait_send(a::BufferedArray) = MPI.Waitall!(a.send_reqs)
-
-function async_recv!(a::BufferedArray, mesh::LocalCartesianMesh, tag)
-    for i in 1:length(mesh.neighbor_ranks)
-        a.recv_reqs[i] = MPI.Irecv!(a.recv_buffers[i], mesh.neighbor_ranks[i], tag, mpicomm)
-    end
-end
-
-function wait_recv(a::BufferedArray, mesh)
-    MPI.Waitall!(a.recv_reqs)
-    flush_recvbufs!(a, mesh)
-end
 
 elems(mesh::LocalCartesianMesh) = elems(mesh.mesh)
 neighbor(elem, face, mesh::LocalCartesianMesh) = neighbor(elem, face, mesh.mesh)
 overelems(f, mesh::LocalCartesianMesh, args...) = overelems(f, mesh.mesh, args...)
+boundaries(mesh::LocalCartesianMesh) = boundaries(mesh.mesh)
 ghostboundaries(mesh::LocalCartesianMesh) = ghostboundaries(mesh.mesh)
 
-function storage(::Type{T}, mesh::LocalCartesianMesh{N, CPU}) where {T, N}
-    bs = ghostboundaries(mesh)
-    recv_bufs = map(idxs -> Array{T}(undef, size(idxs)), bs)
-    send_bufs = map(idxs -> Array{T}(undef, size(idxs)), bs)
+storage(T::Type, m::LocalCartesianMesh{<:Any, CPU}) = storage(T, m.mesh)
+
+"""
+    sync_ghost!(mesh::LocalCartesianMesh, st::OffsetArray)
+
+Track the ghost cells of this array, communicate them in `async_send!` and `async_recv!`
+"""
+function sync_ghost!(mesh::LocalCartesianMesh, x::OffsetArray)
+    bs = boundaries(mesh)
+
+    recv_bufs = map(idxs -> Array{eltype(x)}(undef, size(idxs)), bs)
+    send_bufs = map(idxs -> Array{eltype(x)}(undef, size(idxs)), bs)
 
     recv_reqs = fill(MPI.REQUEST_NULL, length(bs))
     send_reqs = fill(MPI.REQUEST_NULL, length(bs))
 
-    BufferedArray(storage(T, mesh.mesh), recv_bufs, send_bufs, recv_reqs, send_reqs)
+    st = (storage=x, recv_buffers=recv_bufs, send_buffers=send_bufs,
+          recv_reqs=recv_reqs, send_reqs=send_reqs)
+
+    push!(mesh.synced_storage, st)
 end
 
-"""
-    sync_storage!(mesh::LocalCartesianMesh, st::BufferedArray)
-
-Forward MPI communication `async_send!`, `async_recv!`, `wait_send`, `wait_recv` on `mesh`
-to `st` BufferedArray.
-"""
-sync_storage!(mesh::LocalCartesianMesh, st::BufferedArray) = push!(mesh.synced_storage, st)
+function maketag(rank, fs, face)
+    MPI.Comm_size(mpicomm) * findfirst(isequal(face), fs)
+end
 
 function async_send!(m::LocalCartesianMesh)
+    el = first(elems(m))
+    fs = collect(faces(el, m))
+    fs′ = opposite.(fs, (el,), (m,)) # Abstraction leak, what if #boundaries != #faces?
+    bs = boundaries(m)
     for (i, s) in enumerate(m.synced_storage)
-        async_send!(s, m, 666+i)
+        for (j, b) in enumerate(bs)
+            s.send_buffers[j] .= @view s.storage[b]
+            to = m.neighbor_ranks[j]
+            t = 1000 * i + maketag(to, fs, fs′[j])
+            println("$(MPI.Comm_rank(mpicomm)) is sending $t to $to")
+            s.send_reqs[j] = MPI.Isend(s.send_buffers[j], to, t, mpicomm)
+        end
     end
 end
 
 function async_recv!(m::LocalCartesianMesh)
+    el = first(elems(m))
+    fs = collect(faces(el, m))
+    fs′ = opposite.(fs, (el,), (m,))
+    bs = ghostboundaries(m)
     for (i, s) in enumerate(m.synced_storage)
-        async_recv!(s, m, 666+i)
+        for j in 1:length(bs)
+            from = m.neighbor_ranks[j]
+            t = 1000 * i + maketag(from, fs, fs[j])
+            println("$(MPI.Comm_rank(mpicomm)) is listening for $t from $from")
+            s.recv_reqs[j] = MPI.Irecv!(s.recv_buffers[j], from, t,mpicomm)
+        end
     end
 end
 
 function wait_recv(m::LocalCartesianMesh)
-    for b in m.synced_storage
-        wait_recv(b, m)
+    MPI.Waitall!(reduce(vcat, map(x->x.recv_reqs, m.synced_storage)))
+    bs = ghostboundaries(m)
+    for (i, s) in enumerate(m.synced_storage)
+        for j in 1:length(bs)
+             s.storage[bs[j]] .= s.recv_buffers[j]
+        end
     end
 end
-wait_send(m::LocalCartesianMesh) = foreach(wait_send, m.synced_storage)
+function wait_send(m::LocalCartesianMesh)
+    MPI.Waitall!(reduce(vcat, map(x->x.send_reqs, m.synced_storage)))
+end
 
 """
     localpart(globalMesh, mpicomm[, ranks=[1:MPI.Comm_size(mpicomm);]'])
