@@ -44,8 +44,8 @@ function sync_ghost!(mesh::LocalCartesianMesh, x::OffsetArray)
     push!(mesh.synced_storage, st)
 end
 
-function maketag(rank, fs, face)
-    MPI.Comm_size(mpicomm) * findfirst(isequal(face), fs)
+function maketag(fs, face)
+    findfirst(isequal(face), fs)
 end
 
 function async_send!(m::LocalCartesianMesh)
@@ -57,8 +57,8 @@ function async_send!(m::LocalCartesianMesh)
         for (j, b) in enumerate(bs)
             s.send_buffers[j] .= @view s.storage[b]
             to = m.neighbor_ranks[j]
-            t = 1000 * i + maketag(to, fs, fs′[j])
-            println("$(MPI.Comm_rank(mpicomm)) is sending $t to $to")
+            t = 1000 * i + maketag(fs, fs′[j])
+            #println("$(MPI.Comm_rank(mpicomm)) is sending $t to $to")
             s.send_reqs[j] = MPI.Isend(s.send_buffers[j], to, t, mpicomm)
         end
     end
@@ -72,8 +72,8 @@ function async_recv!(m::LocalCartesianMesh)
     for (i, s) in enumerate(m.synced_storage)
         for j in 1:length(bs)
             from = m.neighbor_ranks[j]
-            t = 1000 * i + maketag(from, fs, fs[j])
-            println("$(MPI.Comm_rank(mpicomm)) is listening for $t from $from")
+            t = 1000 * i + maketag(fs, fs[j])
+            #println("$(MPI.Comm_rank(mpicomm)) is listening for $t from $from")
             s.recv_reqs[j] = MPI.Irecv!(s.recv_buffers[j], from, t,mpicomm)
         end
     end
