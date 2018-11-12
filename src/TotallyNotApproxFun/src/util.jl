@@ -57,7 +57,7 @@ end
 
 StaticArrays.SVector(i::CartesianIndex) = SVector(Tuple(i))
 
-function Base.collect(it::Base.Iterators.ProductIterator{TT}) where {TT<:Tuple{Vararg{SArray}}}
+@inline function Base.collect(it::Base.Iterators.ProductIterator{TT}) where {TT<:Tuple{Vararg{SArray}}}
     sproduct(it.iterators)
 end
 
