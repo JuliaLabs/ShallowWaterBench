@@ -212,17 +212,17 @@ function boundaries(mesh::CartesianMesh{N}) where N
     fI = first(elems(mesh))
     lI = last(elems(mesh))
 
-    upper = ntuple(Val(N)) do i
-        head, tail = select(fI, lI, i)
-        CartesianIndices((head..., fI[i], tail...))
-    end
+    fs = faces(fI, mesh)
 
-    lower = ntuple(Val(N)) do i
-        head, tail = select(fI, lI, i)
-        CartesianIndices((head..., lI[i], tail...))
-    end
-
-    return (upper..., lower...)
+    Tuple(ntuple(Val(N)) do i
+        if f[i] == -1
+            fI[i]
+        elseif f[i] == 1
+            lI[i]
+        else
+            fI[i]:lI[i]
+        end
+    end for f in fs)
 end
 
 """
@@ -234,29 +234,17 @@ function ghostboundaries(mesh::GhostCartesianMesh{N}) where N
     fI = first(elems(mesh))
     lI = last(elems(mesh))
 
-    upper = ntuple(Val(N)) do i
-        head, tail = select(fI, lI, i)
-        CartesianIndices((head..., fI[i] - 1, tail...))
-    end
+    fs = faces(fI, mesh)
 
-    lower = ntuple(Val(N)) do i
-        head, tail = select(fI, lI, i)
-        CartesianIndices((head..., lI[i] + 1, tail...))
-    end
-
-    return (upper..., lower...)
-end
-
-@inline function select(fI, lI, i)
-    head = ntuple(i-1) do j
-        fI[j]:lI[j]
-    end
-
-    tail = ntuple(length(fI) - i) do j
-        fI[i+j]:lI[i+j]
-    end
-
-    return head, tail
+    Tuple(ntuple(Val(N)) do i
+        if f[i] == -1
+            fI[i]-1
+        elseif f[i] == 1
+            lI[i]+1
+        else
+            fI[i]:lI[i]
+        end
+    end for f in fs)
 end
 
 include("mpi_mesh.jl")
