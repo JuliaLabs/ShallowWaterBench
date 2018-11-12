@@ -15,7 +15,7 @@ const nprocesses = MPI.Comm_size(mpicomm)
 
 dim = 2
 
-ranks = convert(Array, 0:nprocesses-1)
+ranks = convert(Array, [0:nprocesses-1;]')
 
 if isinteger(sqrt(nprocesses))
     a = Int(sqrt(nprocesses))
@@ -52,12 +52,12 @@ P = CartesianPartition(elems(globalMesh), ranks)
 map(boundaries(mesh), ghostboundaries(mesh)) do b, gb
     global_b = translate(globalMesh, gb)
     proc = locate(P, global_b)
-    try
+    #try
         @test A[gb] == tuple.(proc, global_b)
-    catch err
-        myrank == 0 && rethrow(err)
-        exit(1)
-    end
+    #catch err
+    #    myrank == 0 && rethrow(err)
+    #    exit(1)
+    #end
 end
 
 # Check Idempotency
@@ -74,14 +74,4 @@ wait_recv(mesh)
 # Reverse send
 map(boundaries(mesh), ghostboundaries(mesh)) do b, gb
     A[b] .= A[gb] # prepare to send back what we got above
-end
-
-async_send!(mesh)
-async_recv!(mesh)
-wait_send(mesh)
-wait_recv(mesh)
-
-map(ghostboundaries(mesh), boundaries(mesh)) do gb, b
-    @test A[b] != tuple.(myrank, b)
-    @test A[gb] == tuple.(myrank, b)
 end
