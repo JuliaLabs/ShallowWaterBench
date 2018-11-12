@@ -109,7 +109,7 @@ Base.iterate(cn::CartesianNeighbors) = (cn[1], 2)
 Base.iterate(cn::CartesianNeighbors, i) = i <= length(cn) ? (cn[i], i+1) : nothing
 Base.IteratorSize(::CartesianNeighbors) = Base.HasShape{1}()
 Base.eltype(cn::CartesianNeighbors{N}) where N = CartesianIndex{N}
-Base.map(f::F, cn::CartesianNeighbors{N}) where {F,N} = ntuple(i->f(cn[i]), 2N)
+Base.map(f::F, cn::CartesianNeighbors{N}) where {F,N} = ntuple(i->f(cn[i]), Val(2N))
 
 """
     PeriodicCartesianMesh{N, B} <: CartesianMesh{N, B}
@@ -129,12 +129,14 @@ PeriodicCartesianMesh(ranges::AbstractUnitRange...; backend = CPU()) = PeriodicC
 elems(mesh::PeriodicCartesianMesh) = mesh.inds
 
 Base.mod(x::T, y::AbstractUnitRange{T}) where {T<:Integer} = y[mod1(x - y[1] + 1, length(y))]
-Base.mod(x::CartesianIndex{N}, y::CartesianIndices{N}) where {N} = CartesianIndex(ntuple(n->mod(x[n], axes(y)[n]), N))
+Base.mod(x::CartesianIndex{N}, y::CartesianIndices{N}) where {N} = CartesianIndex(ntuple(n->mod(x[n], axes(y)[n]), Val(N)))
 
 opposite(face, elem, mesh::PeriodicCartesianMesh) = -face
 
-neighbor(elem, face, mesh::PeriodicCartesianMesh) =
-    (elem + face) in mesh.inds ? elem + face : mod(elem + face, mesh.inds)
+function neighbor(elem::T, face, mesh::PeriodicCartesianMesh) where {T}
+    elem′ = (elem + face) in mesh.inds ? elem + face : mod(elem + face, mesh.inds)
+    elem′::T
+end
 
 function overelems(f::F, mesh::PeriodicCartesianMesh{N, CPU}, args...) where {F, N}
     for I in elems(mesh)
@@ -150,7 +152,7 @@ end
 
 function translate(mesh::PeriodicCartesianMesh{N}, boundary) where N
     pI = axes(elems(mesh))
-    b = ntuple(N) do i
+    b = ntuple(Val(N)) do i
         b = boundary.indices[i]
         length(b) > 1 ? b : mod(b[1], pI[i])
     end
@@ -188,7 +190,7 @@ end
 
 function storage(::Type{T}, mesh::GhostCartesianMesh{N, CPU}) where {T, N}
     inds = elems(mesh).indices
-    inds = ntuple(N) do i
+    inds = ntuple(Val(N)) do i
         I = inds[i]
         (first(I)-1):(last(I)+1)
     end
