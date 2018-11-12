@@ -1,7 +1,6 @@
 using SimpleMeshing
 using .Meshing
 using .Partitions
-using Serialization
 using TotallyNotApproxFun
 using StaticArrays
 using Base.Iterators
@@ -98,10 +97,6 @@ function setup(backend)
     sync_ghost!(mesh, bathymetry)
     sync_ghost!(mesh, U⃗)
 
-    open(io->serialize(io, h), "testdata/h0.jls", "w")
-    open(io->serialize(io, bathymetry), "testdata/bathymetry0.jls", "w")
-    open(io->serialize(io, U⃗), "testdata/U0.jls", "w")
-
     elem₁ = first(elems(mesh))
     faces₁ = faces(elem₁, mesh)
     Jfaces = SVector{length(faces₁)}([norm(∇(X⃗⁻¹[elem₁][face])(zero(Î))) for face in faces₁])
@@ -140,10 +135,6 @@ function compute(tend, mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, gravity, X⃗,
             end
 
             wait_recv(mesh) # fill in data from previous iteration
-
-            open(io->serialize(io, h), "testdata/h$step-$s.jls", "w")
-            open(io->serialize(io, bathymetry), "testdata/bathymetry$step-$s.jls", "w")
-            open(io->serialize(io, U⃗), "testdata/U$step-$s.jls", "w")
 
             overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
                 myΔh = ComboFun(Δh[elem].basis, MArray(Δh[elem].coeffs))
