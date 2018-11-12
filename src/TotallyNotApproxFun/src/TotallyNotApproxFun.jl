@@ -138,7 +138,7 @@ end
 #ProductBasis{T, N, B}() where {T, N, B} = ProductBasis((b() for b in B.parameters)...)
 Base.size(b::ProductBasis) = map(length, b.bases)
 Base.eltype(b::ProductBasis{T, N}) where {T, N} = ProductFun{T, N, Tuple{map(eltype, b.bases)...}}
-@inline function Base.getindex(b::ProductBasis, i::Int...)::eltype(b)
+Base.@propagate_inbounds function Base.getindex(b::ProductBasis, i::Int...)::eltype(b)
     ind = Tuple(CartesianIndices(b)[i...])
     ProductFun(map((b,j)->getindex(b, j), b.bases, ind)...)
 end
@@ -165,7 +165,7 @@ normal(face::CartesianIndex) = SVector(face)
 
 @generated function Base.getindex(f::ComboFun{<:Any, N, <:ProductBasis}, I::CartesianIndex{N}) where {N}
     thunk = quote
-        Base.@_inline_meta
+        Base.@_propagate_inbounds_meta
     end
     for dim in 1:N
         for (offset, select) in ((-1, 1), (1, :end))
@@ -178,12 +178,13 @@ normal(face::CartesianIndex) = SVector(face)
             end)
         end
     end
+    push!(thunk.args, :(error("Invalid ind")))
     return thunk
 end
 
 @generated function Base.setindex!(f::ComboFun{<:Any, N, <:ProductBasis}, g::ComboFun{<:Any, M, <:ProductBasis}, I::CartesianIndex{N}) where {N, M}
     thunk = quote
-        Base.@_inline_meta
+        Base.@_propagate_inbounds_meta
     end
     for dim in 1:N
         for (offset, select) in ((-1, 1), (1, :end))
@@ -196,6 +197,7 @@ end
             end)
         end
     end
+    push!(thunk.args, :(error("Invalid ind")))
     return thunk
 end
 
@@ -326,9 +328,10 @@ end
 
 function ∫∇Ψ(f::ComboFun{<:AbstractMatrix, 2, <:ProductBasis{<:Any, 2, <:Tuple{Vararg{<:LagrangeBasis}}}})
     ω = map(∫, f.basis)
-    return ComboFun(f.basis, dimsmapslices(1, c->D(f.basis.bases[1].points)' * c, ω.*(getindex.(f.coeffs, 1, :))) +
-                             dimsmapslices(2, c->D(f.basis.bases[2].points)' * c, ω.*(getindex.(f.coeffs, 2, :))))
+    return ComboFun(f.basis, dimsmapslices(1, c->D(f.basis.bases[1].points)' * c, map(*, ω, map(c -> getindex(c, 1, :), f.coeffs))) +
+                             dimsmapslices(2, c->D(f.basis.bases[2].points)' * c, map(*, ω, map(c -> getindex(c, 2, :), f.coeffs))))
 end
+
 
 function ∫Ψ(f::ComboFun)
     return ComboFun(f.basis, f.coeffs .* map(∫, f.basis))

@@ -1,5 +1,6 @@
 [deps]
 CUDAnative = "be33ccc6-a3ff-5ff2-a52e-74243cff1e17"
+Canary = "f104530e-ab06-11e8-1c1e-6d6e4a5d5c91"
 CuArrays = "3a865a2d-5b23-5a0f-bc46-62713ec82fae"
 GPUArrays = "0c68f7d7-f131-5f86-a1c3-88cf8149b2d7"
 GPUMeshing = "e13cbf70-dde4-11e8-20f0-c12cd972e7c8"

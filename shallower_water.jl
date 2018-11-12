@@ -33,8 +33,10 @@ if Base.find_package("GPUMeshing") !== nothing
     using GPUMeshing
     backend = GPU()
     GPUMeshing.CuArrays.allowscalar(false)
+    adapt(x) = GPUMeshing._adapt(x)
 else
     backend = CPU()
+    adapt(x) = x
 end
 
 MPI.Initialized() || MPI.Init()
@@ -105,8 +107,7 @@ function setup(backend)
 
     params = (mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, gravity, X⃗, dX⃗, Î, Ψ, Jfaces, M)
 
-    # todo adapt to backend and reconstruct mesh
-    return params
+    return map(adapt, params)
 end
 
 function compute(tend, mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, gravity, X⃗, dX⃗, Î, Ψ, Jfaces, M)
@@ -125,18 +126,20 @@ function compute(tend, mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, gravity, X⃗,
 
             # Volume integral
             overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
-                #function volumerhs!(rhs, Q::NamedTuple{S, NTuple{3, T}}, bathymetry, metric, D, ω, elems, gravity, δnl) where {S, T}
+            @inbounds begin
                 ht         = h[elem] + bathymetry[elem]
                 u⃗          = U⃗[elem] / ht
                 fluxh      = U⃗[elem]
                 Δh[elem]  += ∫∇Ψ(dX⃗ * fluxh * J)
-                fluxU⃗      = (u⃗ * u⃗' * ht) + I * gravity * (0.5 * h[elem]^2 + h[elem] * bathymetry[elem])
+                fluxU⃗      = (u⃗ * u⃗' * ht) + I * gravity * (0.5 * h[elem]*h[elem] + h[elem] * bathymetry[elem])
                 ΔU⃗[elem]  += ∫∇Ψ(dX⃗ * fluxU⃗ * J)
+            end
             end
 
             wait_recv(mesh) # fill in data from previous iteration
 
             overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
+            @inbounds begin
                 myΔh = ComboFun(Δh[elem].basis, MArray(Δh[elem].coeffs))
                 myΔU⃗ = ComboFun(ΔU⃗[elem].basis, MArray(ΔU⃗[elem].coeffs))
                 for (face, Jface) in zip(faces(elem, mesh), Jfaces)
@@ -166,16 +169,19 @@ function compute(tend, mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, gravity, X⃗,
                 Δh[elem] = ComboFun(myΔh.basis, SArray(myΔh.coeffs))
                 ΔU⃗[elem] = ComboFun(myΔU⃗.basis, SArray(myΔU⃗.coeffs))
             end
-
-            # Update steps
-            overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
-                ## Assuming advection == false
-                h[elem] += RKB[s] * dt * Δh[elem] / M
-                U⃗[elem] += RKB[s] * dt * ΔU⃗[elem] / M
-                Δh[elem] *= RKA[s%length(RKA)+1]
-                ΔU⃗[elem] *= RKA[s%length(RKA)+1]
             end
 
+            # Update steps
+            s′ = mod1(s, length(RKA))
+            overelems(mesh, h, U⃗, Δh, ΔU⃗, M, RKA[s′], RKB[s], dt) do elem, mesh, h, U⃗, Δh, ΔU⃗, M, rka, rkb, dt
+            @inbounds begin
+                ## Assuming advection == false
+                h[elem] += rkb * dt * Δh[elem] / M
+                U⃗[elem] += rkb * dt * ΔU⃗[elem] / M
+                Δh[elem] *= rka
+                ΔU⃗[elem] *= rka
+            end
+            end
         end
         if floor(Int, 8/(10 / MPI.Comm_size(mpicomm))) == MPI.Comm_rank(mpicomm)
             @show h[8,8].coeffs
