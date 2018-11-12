@@ -92,17 +92,10 @@ function setup(backend)
     gravity    = 10.0
     #sJ         = det(∇(X⃗⁻¹[1][face]))
 
-    # Keep these 3 arrays in sync
-    sync_storage!(mesh, h)
-    sync_storage!(mesh, bathymetry)
-    sync_storage!(mesh, U⃗)
-
-    # Let's sync before getting started.
-    # XXX: is this what swe_example.jl does?
-    async_recv!(mesh)
-    async_send!(mesh)
-    wait_send(mesh)
-    wait_recv(mesh)
+    # Keep these 3 arrays in sync across workers
+    sync_ghost!(mesh, h)
+    sync_ghost!(mesh, bathymetry)
+    sync_ghost!(mesh, U⃗)
 
     elem₁ = first(elems(mesh))
     faces₁ = faces(elem₁, mesh)
@@ -126,9 +119,6 @@ function compute(tend, mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, gravity, X⃗,
     for step in 1:nsteps
         for s in 1:length(RKA)
 
-            async_recv!(mesh)
-            wait_send(mesh) # iter=1 this is a noop
-            async_send!(mesh)
             # Volume integral
             overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
                 #function volumerhs!(rhs, Q::NamedTuple{S, NTuple{3, T}}, bathymetry, metric, D, ω, elems, gravity, δnl) where {S, T}
@@ -140,8 +130,10 @@ function compute(tend, mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, gravity, X⃗,
                 ΔU⃗[elem]  += ∫∇Ψ(dX⃗ * fluxU⃗ * J)
             end
 
+            async_send!(mesh)
+            async_recv!(mesh)
             # Flux integral
-
+            wait_send(mesh) # iter=1 this is a noop
             wait_recv(mesh) # fill in data from previous iteration
 
             overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
@@ -184,6 +176,10 @@ function compute(tend, mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, gravity, X⃗,
                 ΔU⃗[elem] *= RKA[s%length(RKA)+1]
             end
 
+        end
+        if MPI.Comm_rank(mpicomm) == 0
+            @show h[8,8].coeffs
+            @show getindex.(U⃗[8,8].coeffs, 2)
         end
     end
 end
