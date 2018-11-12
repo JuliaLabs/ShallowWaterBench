@@ -6,6 +6,7 @@ using StaticArrays
 using Base.Iterators
 using LinearAlgebra
 using Test
+using MPI
 
 const RKA = (Float64(0),
              Float64(-567301805773)  / Float64(1357537059087),
@@ -38,6 +39,11 @@ else
     adapt(x) = x
 end
 
+MPI.Initialized() || MPI.Init()
+MPI.finalize_atexit()
+
+const mpicomm = MPI.COMM_WORLD
+
 function main(tend=0.32, backend=backend)
     params = setup(backend)
     compute(tend, params...)
@@ -45,7 +51,8 @@ end
 
 function setup(backend)
     # Create a CPU mesh
-    mesh = PeriodicCartesianMesh(ntuple(i-> 1:10, dim))
+    globalMesh = PeriodicCartesianMesh(ntuple(i-> 1:10, dim); backend=backend)
+    mesh = localpart(globalMesh, mpicomm)
 
     # the whole mesh will go from X⃗₀ to X⃗₁
     # (to add a vector arrow to a quantity like `v⃗`, type `v\vec` and then press tab.)
@@ -82,10 +89,15 @@ function setup(backend)
     U⃗          = myapproximate(x⃗ -> zero(x⃗))
     Δh         = myapproximate(x⃗ -> zero(eltype(x⃗)))
     ΔU⃗         = myapproximate(x⃗ -> zero(x⃗))
-    dX⃗         = ∇(X⃗[1])(zero(Î))
+    dX⃗         = ∇(X⃗[I⃗₀])(zero(Î))
     J          = inv(det(dX⃗))
     gravity    = 10.0
     #sJ         = det(∇(X⃗⁻¹[1][face]))
+
+    # Keep these 3 arrays in sync across workers
+    sync_ghost!(mesh, h)
+    sync_ghost!(mesh, bathymetry)
+    sync_ghost!(mesh, U⃗)
 
     elem₁ = first(elems(mesh))
     faces₁ = faces(elem₁, mesh)
@@ -107,6 +119,11 @@ function compute(tend, mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, gravity, X⃗,
     for step in 1:nsteps
         for s in 1:length(RKA)
 
+            async_send!(mesh)
+            async_recv!(mesh)
+            # Flux integral
+            wait_send(mesh) # iter=1 this is a noop
+
             # Volume integral
             overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
             @inbounds begin
@@ -119,7 +136,8 @@ function compute(tend, mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, gravity, X⃗,
             end
             end
 
-            # Flux integral
+            wait_recv(mesh) # fill in data from previous iteration
+
             overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
             @inbounds begin
                 myΔh = ComboFun(Δh[elem].basis, MArray(Δh[elem].coeffs))

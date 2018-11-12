@@ -2,8 +2,6 @@ module Meshing
     export Mesh, CartesianMesh, PeriodicCartesianMesh, GhostCartesianMesh, CPU
     export faces, neighbor, opposite, neighbors, overelems, storage, elems
     export ghostboundaries, boundaries, backend, translate
-    export BufferedArray, mpistorage, neighbor_ranks, fill_sendbufs!,
-           flush_recvbufs!, async_send!, async_recv!, wait_send, wait_recv
 
 using Base.Cartesian
 using OffsetArrays
@@ -111,6 +109,8 @@ Base.IteratorSize(::CartesianNeighbors) = Base.HasShape{1}()
 Base.eltype(cn::CartesianNeighbors{N}) where N = CartesianIndex{N}
 Base.map(f::F, cn::CartesianNeighbors{N}) where {F,N} = ntuple(i->f(cn[i]), Val(2N))
 
+opposite(face, elem, mesh::CartesianMesh) = -face
+
 """
     PeriodicCartesianMesh{N, B} <: CartesianMesh{N, B}
 
@@ -154,7 +154,14 @@ function translate(mesh::PeriodicCartesianMesh{N}, boundary) where N
     pI = axes(elems(mesh))
     b = ntuple(Val(N)) do i
         b = boundary.indices[i]
-        length(b) > 1 ? b : mod(b[1], pI[i])
+        if length(b) > 1
+            b
+        else
+            s = mod(b[1], pI[i])
+            s:s # because if all dimensions are single numbers,
+                # we will call CartesianIndices(a::Int, b::Int)
+                # which returns CartesianIndices((1:a, 1:b))
+        end
     end
     CartesianIndices(b)
 end
@@ -209,17 +216,17 @@ function boundaries(mesh::CartesianMesh{N}) where N
     fI = first(elems(mesh))
     lI = last(elems(mesh))
 
-    upper = ntuple(Val(N)) do i
-        head, tail = select(fI, lI, i)
-        CartesianIndices((head..., fI[i], tail...))
-    end
+    fs = faces(fI, mesh)
 
-    lower = ntuple(Val(N)) do i
-        head, tail = select(fI, lI, i)
-        CartesianIndices((head..., lI[i], tail...))
-    end
-
-    return (upper..., lower...)
+    Tuple(CartesianIndices(ntuple(Val(N)) do i
+        if f[i] == -1
+            fI[i]
+        elseif f[i] == 1
+            lI[i]
+        else
+            fI[i]:lI[i]
+        end
+    end) for f in fs)
 end
 
 """
@@ -231,94 +238,19 @@ function ghostboundaries(mesh::GhostCartesianMesh{N}) where N
     fI = first(elems(mesh))
     lI = last(elems(mesh))
 
-    upper = ntuple(Val(N)) do i
-        head, tail = select(fI, lI, i)
-        CartesianIndices((head..., fI[i] - 1, tail...))
-    end
+    fs = faces(fI, mesh)
 
-    lower = ntuple(Val(N)) do i
-        head, tail = select(fI, lI, i)
-        CartesianIndices((head..., lI[i] + 1, tail...))
-    end
-
-    return (upper..., lower...)
+    Tuple(CartesianIndices(ntuple(Val(N)) do i
+        if f[i] == -1
+            fI[i]-1
+        elseif f[i] == 1
+            lI[i]+1
+        else
+            fI[i]:lI[i]
+        end
+    end) for f in fs)
 end
 
-@inline function select(fI, lI, i)
-    head = ntuple(i-1) do j
-        fI[j]:lI[j]
-    end
-
-    tail = ntuple(length(fI) - i) do j
-        fI[i+j]:lI[i+j]
-    end
-
-    return head, tail
-end
-
-using MPI
-
-struct BufferedArray{T, N, A<:AbstractArray{T,N}} <: AbstractArray{T,N}
-    arr::A
-    recv_buffers::Tuple
-    send_buffers::Tuple
-    recv_reqs::Vector{MPI.Request}
-    send_reqs::Vector{MPI.Request}
-end
-
-Base.size(a::BufferedArray) = size(a.arr)
-Base.getindex(a::BufferedArray, idx...) = a.arr[idx...]
-Base.setindex!(a::BufferedArray, val, idx...) = a.arr[idx...] = val
-Base.axes(a::BufferedArray) = axes(a.arr) # now includes offsets
-Base.IndexStyle(a::BufferedArray) = IndexStyle(a.arr)
-
-function flush_recvbufs!(a::BufferedArray, mesh::GhostCartesianMesh)
-    for (bidx, buf) in zip(ghostboundaries(mesh), a.recv_buffers)
-        a[bidx] .= buf
-    end
-end
-
-function fill_sendbufs!(a::BufferedArray, mesh::GhostCartesianMesh)
-    for (bidx, buf) in zip(ghostboundaries(mesh), a.recv_buffers)
-        buf .= a[bidx]
-    end
-end
-
-function mpistorage(::Type{T}, mesh::GhostCartesianMesh{N, CPU}) where {T, N}
-    bs = ghostboundaries(mesh)
-    recv_bufs = map(idxs -> Array{T}(undef, size(idxs)), bs)
-    send_bufs = map(idxs -> Array{T}(undef, size(idxs)), bs)
-
-    recv_reqs = fill(MPI.REQUEST_NULL, length(bs))
-    send_reqs = fill(MPI.REQUEST_NULL, length(bs))
-
-    BufferedArray(storage(T, mesh), recv_bufs, send_bufs, recv_reqs, send_reqs)
-end
-
-const mpicomm = MPI.COMM_WORLD
-
-function async_send!(a::BufferedArray, mesh, nbrranks)
-
-    fill_sendbufs!(a, mesh)
-
-    for i in 1:length(nbrranks)
-        a.send_reqs[i] = MPI.Isend(a.send_buffers[i],
-                                   nbrranks[i], 777, mpicomm)
-    end
-end
-
-wait_send(a::BufferedArray) = MPI.Waitall!(a.send_reqs)
-
-function async_recv!(a::BufferedArray, mesh, nbrranks)
-
-    for i in 1:length(nbrranks)
-        a.recv_reqs[i] = MPI.Irecv!(a.recv_buffers[i],
-                                    nbrranks[i], 777, mpicomm)
-    end
-
-    flush_recvbufs!(a, mesh)
-end
-
-wait_recv(a::BufferedArray) = MPI.Waitall!(a.recv_reqs)
+include("mpi_mesh.jl")
 
 end # module
