@@ -84,7 +84,7 @@ function wait_recv(m::LocalCartesianMesh)
     bs = ghostboundaries(m)
     for (i, s) in enumerate(m.synced_storage)
         for j in 1:length(bs)
-             s.storage[bs[j]] .= s.recv_buffers[j]
+            copyto!(s.storage, bs[j], s.recv_buffers[j], CartesianIndices(s.recv_buffers[j]))
         end
     end
 end
