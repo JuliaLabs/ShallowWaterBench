@@ -10,7 +10,7 @@ export localpart, neighbor_ranks, sync_ghost!,
 """
 struct LocalCartesianMesh{N, B, G<:CartesianMesh{N, B}} <: CartesianMesh{N, B}
     mesh::G
-    neighbor_ranks::Tuple{Vararg{Int}}
+    neighbor_ranks::Vector{Int}
     synced_storage::Vector{Any}
 end
 
@@ -47,55 +47,73 @@ end
 function sync_ghost!(mesh, x) end
 
 function maketag(fs, face)
-    findfirst(isequal(face), fs)
+    t = findfirst(isequal(face), fs)
+    if t === nothing
+        error("Failed to figure out where to send this")
+    end
+    return t
+end
+
+@noinline function start_send_bufs(s, tag1, bs, fs, fs′, to)
+    for j in 1:length(bs)
+        b = bs[j]
+        buf = s.send_buffers[j]
+        copyto!(buf, CartesianIndices(buf), s.storage, b)
+        t = tag1 + maketag(fs, fs′[j])
+        #println("$(MPI.Comm_rank(mpicomm)) is sending $t to $to")
+        s.send_reqs[j] = MPI.Isend(buf, to[j], t, mpicomm)
+    end
 end
 
 function async_send!(m::LocalCartesianMesh)
     el = first(elems(m))
     fs = collect(faces(el, m))
-    fs′ = opposite.(fs, (el,), (m,)) # Abstraction leak, what if #boundaries != #faces?
+    fs′ = opposite.(fs, (el,), (m,))
     bs = boundaries(m)
     for (i, s) in enumerate(m.synced_storage)
-        for (j, b) in enumerate(bs)
-            s.send_buffers[j] .= @view s.storage[b]
-            to = m.neighbor_ranks[j]
-            t = 1000 * i + maketag(fs, fs′[j])
-            #println("$(MPI.Comm_rank(mpicomm)) is sending $t to $to")
-            s.send_reqs[j] = MPI.Isend(s.send_buffers[j], to, t, mpicomm)
-        end
+        start_send_bufs(s, 1000*i, bs, fs, fs′, m.neighbor_ranks)
     end
 end
 function async_send!(m) end
+
+function start_recv_buf(s, tag1, fs, from, bs)
+    for j in 1:length(bs)
+        t = tag1 + maketag(fs, fs[j])
+        #println("$(MPI.Comm_rank(mpicomm)) is listening for $t from $from")
+        s.recv_reqs[j] = MPI.Irecv!(s.recv_buffers[j], from[j],t,mpicomm)
+    end
+end
 
 function async_recv!(m::LocalCartesianMesh)
     el = first(elems(m))
     fs = collect(faces(el, m))
     fs′ = opposite.(fs, (el,), (m,))
     bs = ghostboundaries(m)
+    from = m.neighbor_ranks
     for (i, s) in enumerate(m.synced_storage)
-        for j in 1:length(bs)
-            from = m.neighbor_ranks[j]
-            t = 1000 * i + maketag(fs, fs[j])
-            #println("$(MPI.Comm_rank(mpicomm)) is listening for $t from $from")
-            s.recv_reqs[j] = MPI.Irecv!(s.recv_buffers[j], from, t,mpicomm)
-        end
+        start_recv_buf(s, 1000*i, fs, from, bs)
     end
 end
 function async_recv!(m) end
 
+
+@noinline function flush_recvbufs!(x, boundaries, bufs)
+    for j in 1:length(boundaries)
+        buf = bufs[j]
+        copyto!(x, boundaries[j], buf, CartesianIndices(buf))
+    end
+end
 function wait_recv(m::LocalCartesianMesh)
     MPI.Waitall!(reduce(vcat, map(x->x.recv_reqs, m.synced_storage)))
     bs = ghostboundaries(m)
     for (i, s) in enumerate(m.synced_storage)
-        for j in 1:length(bs)
-            copyto!(s.storage, bs[j], s.recv_buffers[j], CartesianIndices(s.recv_buffers[j]))
-        end
+        flush_recvbufs!(s.storage, bs, s.recv_buffers)
     end
 end
 function wait_recv(m) end
 
 function wait_send(m::LocalCartesianMesh)
-    MPI.Waitall!(reduce(vcat, map(x->x.send_reqs, m.synced_storage)))
+    foreach(x->MPI.Waitall!(x.send_reqs), m.synced_storage)
 end
 function wait_send(m) end
 
@@ -127,5 +145,5 @@ function localpart(globalMesh, mpicomm, ranks=convert(Array, (0:MPI.Comm_size(mp
     nbs = map(ghostboundaries(mesh), boundaries(mesh)) do ghostelems, elems
         locate(P, translate(globalMesh, ghostelems))
     end
-    LocalCartesianMesh(mesh, nbs, [])
+    LocalCartesianMesh(mesh, [nbs...], [])
 end
