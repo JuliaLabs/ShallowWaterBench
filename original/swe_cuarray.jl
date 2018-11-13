@@ -872,7 +872,7 @@ function main()
 
   println("Starting reference sim. dim=$dim; simsize=$simsize; tend=$time_final; base_dt=$base_dt")
   #Input Parameters
-  N=4
+  N=3
   Ne=simsize
   iplot=10
   δnl=1
