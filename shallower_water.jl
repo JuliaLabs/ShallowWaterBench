@@ -43,8 +43,8 @@ function simulate(tend, mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, g, X⃗, dX�
             # Flux integral
             overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
             @inbounds begin
-                Δhₑ = ComboFun(Δh[elem].basis, MArray(Δh[elem].coeffs))
-                ΔU⃗ₑ = ComboFun(ΔU⃗[elem].basis, MArray(ΔU⃗[elem].coeffs))
+                Δhₑ = LinearCombinationFun(Δh[elem].basis, MArray(Δh[elem].coeffs))
+                ΔU⃗ₑ = LinearCombinationFun(ΔU⃗[elem].basis, MArray(ΔU⃗[elem].coeffs))
                 for (face, face_J) in zip(faces(elem, mesh), face_Js)
                     other_elem =  neighbor(elem, face, mesh)
                     other_face =  opposite(face, other_elem, mesh)
@@ -69,8 +69,8 @@ function simulate(tend, mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, g, X⃗, dX�
                     other_flux =  (other_U⃗ₑ * other_U⃗ₑ' / other_htₑ + g * (other_htₑ^2 - other_hbₑ^2)/2 * I)
                     ΔU⃗ₑ[face]  -= ∫Ψ(((flux + other_flux)' * normal(face) - λ * (other_U⃗ₑ - U⃗ₑ)) / 2 * face_J)
                 end
-                Δh[elem] = ComboFun(Δhₑ.basis, SArray(Δhₑ.coeffs))
-                ΔU⃗[elem] = ComboFun(ΔU⃗ₑ.basis, SArray(ΔU⃗ₑ.coeffs))
+                Δh[elem] = LinearCombinationFun(Δhₑ.basis, SArray(Δhₑ.coeffs))
+                ΔU⃗[elem] = LinearCombinationFun(ΔU⃗ₑ.basis, SArray(ΔU⃗ₑ.coeffs))
             end
             end
 

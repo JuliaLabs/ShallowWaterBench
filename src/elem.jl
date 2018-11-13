@@ -11,13 +11,13 @@ global_x⃗ = map(i -> SVector(Tuple(i)))/size(mesh)
 
 #return a linear function which maps x₀ to y₀ and x₁ to y₁
 function repositioner(x₀, x₁, y₀, y₁)
-    ProductFun(ComboFun.(LagrangeBasis.(SVector.(x₀, x₁)), SVector.(y₀, y₁))...)
+    ProductFun(LinearCombinationFun.(LagrangeBasis.(SVector.(x₀, x₁)), SVector.(y₀, y₁))...)
 end
 
 
 #f = LagrangeFun(SVector(2.0, 4.0), 1)
 #println(f(1))
-#g = ComboFun(LagrangeBasis(SVector(2.0, 4.0)), SVector(-1.0, 1.0))
+#g = LinearCombinationFun(LagrangeBasis(SVector(2.0, 4.0)), SVector(-1.0, 1.0))
 #println(g(1))
 #
 #using InteractiveUtils
@@ -173,7 +173,7 @@ end
 
 struct LobattoPoints{T, P}
 
-apply(f::ComboFun{T, 1, PolyBasis{S, P}}, x::SVector{1})::T where {T, S, P} = apply(f, x[1])
+apply(f::LinearCombinationFun{T, 1, PolyBasis{S, P}}, x::SVector{1})::T where {T, S, P} = apply(f, x[1])
 
 #Given M Lobatto points on [-1, 1], this is the order M polynomial which is 1 on the I^th point and zero everywhere else
 struct LobattoBasis{T, M, I} <: OrthoBasis{T, N, P} end
@@ -188,9 +188,9 @@ for M in 1:10
         points(LobattoBasis
         
         (ξ, ω) gausslobatto(7)
-        function Base.$(op)(a::ComboFun{T, N, B}, b::ComboFun{S, N, B}) where {T, S, N, B <: OrthoBasis}
+        function Base.$(op)(a::LinearCombinationFun{T, N, B}, b::LinearCombinationFun{S, N, B}) where {T, S, N, B <: OrthoBasis}
             @assert a.basis == b.basis
-            ComboFun(a.basis, map($op, a.coeffs, b.coeffs))
+            LinearCombinationFun(a.basis, map($op, a.coeffs, b.coeffs))
         end
     end
 end
@@ -210,7 +210,7 @@ D = spectralderivative(ξ)
 ∫ϕ(f::CartesianLobattoBasis) = 
 
 #we can probably specialize this case.
-#apply(f::ComboFun{T, N, M, B}, x::NTuple{N})::T where {T, N, M, B<:InterpolationBasis{M}} = sum(f.coeffs .* apply.(b, (x,)))
+#apply(f::LinearCombinationFun{T, N, M, B}, x::NTuple{N})::T where {T, N, M, B<:InterpolationBasis{M}} = sum(f.coeffs .* apply.(b, (x,)))
 #funs(b::InterpolationBasis) = map(x->apply(b, x), points(b))
 
 #A basis corresponding to a cartesian combination of linear Lobatto Basis Functions
