@@ -22,13 +22,16 @@ end
 @testset "Correctness check" begin
     let
         include("../src/shallow_water.jl")
-        EtoC = [Int.((mesh.elemtocoord.*brickN[1])[:,4,i]) for i in 1:prod(brickN)]
-        global h1 = [Q.h[:,:,EtoC[i,j]] for i in 1:brickN[1], j in 1:brickN[2]]
+        EtoC = [round.(Int, (mesh.elemtocoord.*10)[:,4,i]) for i = 1:(10 * 10)]
+        RefC = zeros(Int64, brickN[1], brickN[2])
+        for t in 1:prod(brickN)
+           RefC[EtoC[t][1], EtoC[t][2]] = t
+        end
+        global h1 = [h[:,:,RefC[i,j]] for i in 1:10, j in 1:10]
     end
     let
         include("../shallower_water.jl")
-        x = h_from_us
-        global h2 = map(t->Array(t.coeffs), x)
+        global h2 = map(t->Array(t.coeffs), main()[1:10, 1:10])
     end
-    @test h1 == h2
+    @test h1 ≈ h2 atol=1e-3
 end

@@ -25,7 +25,6 @@ const RKC = (Float64(0),
              Float64(2526269341429) / Float64(6820363962896),
              Float64(2006345519317) / Float64(3224310063776),
              Float64(2802321613138) / Float64(2924317926251))
-
 const dim = 2
 const order = 3
 
@@ -44,7 +43,7 @@ MPI.finalize_atexit()
 
 const mpicomm = MPI.COMM_WORLD
 
-function main(tend=0.32, backend=backend)
+function main(tend=0.005, backend=backend)
     params = setup(backend)
     compute(tend, params...)
 end
@@ -112,7 +111,7 @@ end
 
 function compute(tend, mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, gravity, X⃗, dX⃗, Î, Ψ, Jfaces, M)
 
-    dt = 0.001
+    dt = 0.0025
     nsteps = ceil(Int64, tend / dt)
     dt = tend / nsteps
 
@@ -184,6 +183,7 @@ function compute(tend, mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, gravity, X⃗,
             end
         end
     end
+    return h
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
