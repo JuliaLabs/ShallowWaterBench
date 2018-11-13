@@ -42,7 +42,9 @@ function sync_ghost!(mesh::LocalCartesianMesh, x::OffsetArray)
           recv_reqs=recv_reqs, send_reqs=send_reqs)
 
     push!(mesh.synced_storage, st)
+    nothing
 end
+function sync_ghost!(mesh, x) end
 
 function maketag(fs, face)
     findfirst(isequal(face), fs)
@@ -63,6 +65,7 @@ function async_send!(m::LocalCartesianMesh)
         end
     end
 end
+function async_send!(m) end
 
 function async_recv!(m::LocalCartesianMesh)
     el = first(elems(m))
@@ -78,6 +81,7 @@ function async_recv!(m::LocalCartesianMesh)
         end
     end
 end
+function async_recv!(m) end
 
 function wait_recv(m::LocalCartesianMesh)
     MPI.Waitall!(reduce(vcat, map(x->x.recv_reqs, m.synced_storage)))
@@ -88,9 +92,12 @@ function wait_recv(m::LocalCartesianMesh)
         end
     end
 end
+function wait_recv(m) end
+
 function wait_send(m::LocalCartesianMesh)
     MPI.Waitall!(reduce(vcat, map(x->x.send_reqs, m.synced_storage)))
 end
+function wait_send(m) end
 
 """
     localpart(globalMesh, mpicomm[, ranks=[1:MPI.Comm_size(mpicomm);]'])
@@ -107,8 +114,13 @@ Create a localpart of a global mesh
 
 a `LocalCartesianMesh` wrapping a `GhostCartesianMesh` with indices offset to represent local part
 in the global mesh.
+
+Returns `globalMesh` if `length(ranks) == 1`.
 """
 function localpart(globalMesh, mpicomm, ranks=convert(Array, (0:MPI.Comm_size(mpicomm)-1)'))
+    if length(ranks) == 1 && first(ranks) == 0
+        return globalMesh
+    end
     P = CartesianPartition(elems(globalMesh), ranks)
     inds = rankindices(P, MPI.Comm_rank(mpicomm))
     mesh = GhostCartesianMesh(CPU(), inds) # TODO: GPU??!
