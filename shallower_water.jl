@@ -7,30 +7,91 @@ using Base.Iterators
 using LinearAlgebra
 using Test
 using MPI
+include("constants.jl")
 
-const RKA = (Float64(0),
-             Float64(-567301805773)  / Float64(1357537059087),
-             Float64(-2404267990393) / Float64(2016746695238),
-             Float64(-3550918686646) / Float64(2091501179385),
-             Float64(-1275806237668) / Float64(842570457699 ))
-
-const RKB = (Float64(1432997174477) / Float64(9575080441755 ),
-             Float64(5161836677717) / Float64(13612068292357),
-             Float64(1720146321549) / Float64(2090206949498 ),
-             Float64(3134564353537) / Float64(4481467310338 ),
-             Float64(2277821191437) / Float64(14882151754819))
-
-const RKC = (Float64(0),
-             Float64(1432997174477) / Float64(9575080441755),
-             Float64(2526269341429) / Float64(6820363962896),
-             Float64(2006345519317) / Float64(3224310063776),
-             Float64(2802321613138) / Float64(2924317926251))
 
 const dim     = parse(Int, get(ENV, "SHALLOW_WATER_DIM", "2"))
 const simsize = parse(Int, get(ENV, "SHALLOW_WATER_SIZE", "10"))
 const tend    = parse(Float64, get(ENV, "SHALLOW_WATER_TEND", "0.32"))
 const base_dt = parse(Float64, get(ENV, "SHALLOW_WATER_DT", "0.001"))
 const order   = 3
+
+
+function simulate(tend, mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, g, X⃗, dX⃗, Î, Ψ, face_Js, M)
+    nsteps = ceil(Int64, tend / base_dt)
+    dt = tend / nsteps
+
+    for step in 1:nsteps
+        for s in 1:length(RKA)
+
+            async_send!(mesh)
+            async_recv!(mesh)
+            wait_send(mesh) # iter=1 this is a noop
+
+            # Volume integral
+            overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
+            @inbounds begin
+                hbₑ        = bathymetry[elem]
+                htₑ        = h[elem] + hbₑ
+                U⃗ₑ         = U⃗[elem]
+
+                Δh[elem]  += ∫∇Ψ(dX⃗ * U⃗ₑ * J)
+                ΔU⃗[elem]  += ∫∇Ψ(dX⃗ * (U⃗ₑ * U⃗ₑ' / htₑ + g * (htₑ^2 - hbₑ^2)/2 * I) * J)
+            end
+            end
+
+            wait_recv(mesh) # fill in data from previous iteration
+
+            # Flux integral
+            overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
+            @inbounds begin
+                Δhₑ = ComboFun(Δh[elem].basis, MArray(Δh[elem].coeffs))
+                ΔU⃗ₑ = ComboFun(ΔU⃗[elem].basis, MArray(ΔU⃗[elem].coeffs))
+                for (face, face_J) in zip(faces(elem, mesh), face_Js)
+                    other_elem =  neighbor(elem, face, mesh)
+                    other_face =  opposite(face, other_elem, mesh)
+
+                    hₑ         =  h[elem][face]
+                    hbₑ        =  bathymetry[elem][face]
+                    htₑ        =  hₑ + hbₑ
+                    U⃗ₑ         =  U⃗[elem][face]
+
+                    other_hₑ   =  h[other_elem][other_face]
+                    other_hbₑ  =  bathymetry[other_elem][other_face]
+                    other_htₑ  =  hₑ + hbₑ
+                    other_U⃗ₑ   =  U⃗[other_elem][other_face]
+
+
+                    λ          =  max( abs( normal(face)' *       U⃗ₑ/      htₑ) + sqrt(g *       htₑ),
+                                       abs(-normal(face)' * other_U⃗ₑ/other_htₑ) + sqrt(g * other_htₑ))
+
+                    Δhₑ[face]  -= ∫Ψ(((U⃗ₑ + other_U⃗ₑ)' * normal(face) - λ * (other_hₑ - hₑ)) / 2 * face_J)
+
+                    flux       =  (      U⃗ₑ *       U⃗ₑ' /       htₑ + g * (      htₑ^2 -       hbₑ^2)/2 * I)
+                    other_flux =  (other_U⃗ₑ * other_U⃗ₑ' / other_htₑ + g * (other_htₑ^2 - other_hbₑ^2)/2 * I)
+                    ΔU⃗ₑ[face]  -= ∫Ψ(((flux + other_flux)' * normal(face) - λ * (other_U⃗ₑ - U⃗ₑ)) / 2 * face_J)
+                end
+                Δh[elem] = ComboFun(Δhₑ.basis, SArray(Δhₑ.coeffs))
+                ΔU⃗[elem] = ComboFun(ΔU⃗ₑ.basis, SArray(ΔU⃗ₑ.coeffs))
+            end
+            end
+
+            # Update steps
+            rka = RKA[s % length(RKA) + 1]
+            rkb = RKB[s]
+            overelems(mesh, h, U⃗, Δh, ΔU⃗, M, rka, rkb, dt) do elem, mesh, h, U⃗, Δh, ΔU⃗, M, rka, rkb, dt
+            @inbounds begin
+                ## Assuming advection == false
+                h[elem] += rkb * dt * Δh[elem] / M
+                U⃗[elem] += rkb * dt * ΔU⃗[elem] / M
+                Δh[elem] *= rka
+                ΔU⃗[elem] *= rka
+            end
+            end
+        end
+    end
+    return h
+end
 
 if Base.find_package("GPUMeshing") !== nothing
     using GPUMeshing
@@ -49,7 +110,7 @@ const mpicomm = MPI.COMM_WORLD
 
 function main(tend=tend, backend=backend)
     params = setup(backend)
-    compute(tend, params...)
+    simulate(tend, params...)
 end
 
 function setup(backend)
@@ -95,7 +156,7 @@ function setup(backend)
     ΔU⃗         = myapproximate(x⃗ -> zero(x⃗))
     dX⃗         = ∇(X⃗[I⃗₀])(zero(Î))
     J          = inv(det(dX⃗))
-    gravity    = 10.0
+    g    = 10.0
     #sJ         = det(∇(X⃗⁻¹[1][face]))
 
     # Keep these 3 arrays in sync across workers
@@ -105,90 +166,13 @@ function setup(backend)
 
     elem₁ = first(elems(mesh))
     faces₁ = faces(elem₁, mesh)
-    Jfaces = SVector{length(faces₁)}([norm(∇(X⃗⁻¹[elem₁][face])(zero(Î))) for face in faces₁])
+    face_Js = SVector{length(faces₁)}([norm(∇(X⃗⁻¹[elem₁][face])(zero(Î))) for face in faces₁])
 
     M = ∫Ψ(approximate(x⃗ -> J, Ψ))
 
-    params = (mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, gravity, X⃗, dX⃗, Î, Ψ, Jfaces, M)
+    params = (mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, g, X⃗, dX⃗, Î, Ψ, face_Js, M)
 
     return map(adapt, params)
-end
-
-function compute(tend, mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, gravity, X⃗, dX⃗, Î, Ψ, Jfaces, M)
-
-    nsteps = ceil(Int64, tend / base_dt)
-    dt = tend / nsteps
-
-    for step in 1:nsteps
-        for s in 1:length(RKA)
-
-            async_send!(mesh)
-            async_recv!(mesh)
-            wait_send(mesh) # iter=1 this is a noop
-
-            # Volume integral
-            overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
-            @inbounds begin
-                ht         = h[elem] + bathymetry[elem]
-                u⃗          = U⃗[elem] / ht
-                fluxh      = U⃗[elem]
-                Δh[elem]  += ∫∇Ψ(dX⃗ * fluxh * J)
-                fluxU⃗      = (u⃗ * u⃗' * ht) + I * gravity * (0.5 * h[elem]*h[elem] + h[elem] * bathymetry[elem])
-                ΔU⃗[elem]  += ∫∇Ψ(dX⃗ * fluxU⃗ * J)
-            end
-            end
-
-            wait_recv(mesh) # fill in data from previous iteration
-
-            # Flux integral
-            overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
-            @inbounds begin
-                myΔh = ComboFun(Δh[elem].basis, MArray(Δh[elem].coeffs))
-                myΔU⃗ = ComboFun(ΔU⃗[elem].basis, MArray(ΔU⃗[elem].coeffs))
-                for (face, Jface) in zip(faces(elem, mesh), Jfaces)
-                    elem′ = neighbor(elem, face, mesh)
-                    face′ = opposite(face, elem′, mesh)
-
-                    hs = h[elem][face]
-                    hb = bathymetry[elem][face]
-
-                    ht        = hs + hb
-                    u⃗         = U⃗[elem][face] / ht
-                    fluxh     = U⃗[elem][face]
-                    fluxU⃗     = (u⃗ * u⃗' * ht) + I * gravity * (0.5 * hs^2 + hs * hb)
-
-                    hs′ = h[elem′][face′]
-                    hb′ = bathymetry[elem′][face′]
-
-                    ht′        = hs′ + hb′
-                    u⃗′         = U⃗[elem′][face′] / ht′
-                    fluxh′     = U⃗[elem′][face′]
-                    fluxU⃗′     = (u⃗′ * u⃗′' * ht′) + I * gravity * (0.5 * hs′^2 + hs′ * hb′)
-
-                    λ         = max(abs(normal(face)' * u⃗) + sqrt(gravity * ht), abs(normal(face)' * u⃗′) + sqrt(gravity * ht′))
-                    myΔh[face]  -= ∫Ψ(((fluxh + fluxh′)' * normal(face) - (λ * (hs′ - hs))) / 2 * Jface)
-                    myΔU⃗[face] -= ∫Ψ(((fluxU⃗ + fluxU⃗′)' * normal(face) - (λ * (U⃗[elem′][face′] - U⃗[elem][face]))) / 2 * Jface)
-                end
-                Δh[elem] = ComboFun(myΔh.basis, SArray(myΔh.coeffs))
-                ΔU⃗[elem] = ComboFun(myΔU⃗.basis, SArray(myΔU⃗.coeffs))
-            end
-            end
-
-            # Update steps
-            rka = RKA[s % length(RKA) + 1]
-            rkb = RKB[s]
-            overelems(mesh, h, U⃗, Δh, ΔU⃗, M, rka, rkb, dt) do elem, mesh, h, U⃗, Δh, ΔU⃗, M, rka, rkb, dt
-            @inbounds begin
-                ## Assuming advection == false
-                h[elem] += rkb * dt * Δh[elem] / M
-                U⃗[elem] += rkb * dt * ΔU⃗[elem] / M
-                Δh[elem] *= rka
-                ΔU⃗[elem] *= rka
-            end
-            end
-        end
-    end
-    return h
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
