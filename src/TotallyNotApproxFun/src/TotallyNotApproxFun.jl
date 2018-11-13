@@ -358,4 +358,7 @@ using Base.Cartesian
     end
 end
 
+include("precompile_TotallyNotApproxFun.jl")
+_precompile_()
+
 end
