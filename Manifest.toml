@@ -126,7 +126,7 @@ deps = ["Distributed", "Mmap", "Random", "Serialization"]
 uuid = "1a1011a3-84de-559e-8e89-a11a2f7dc383"
 
 [[SimpleMeshing]]
-deps = ["MPI", "OffsetArrays"]
+deps = ["Canary", "MPI", "OffsetArrays", "TotallyNotApproxFun"]
 path = "src/SimpleMeshing"
 uuid = "c9d4e704-dde4-11e8-203c-b9e6aaa84b04"
 version = "0.0.0"
