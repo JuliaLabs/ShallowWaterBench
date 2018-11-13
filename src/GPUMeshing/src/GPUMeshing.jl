@@ -5,12 +5,14 @@ export GPU
 using SimpleMeshing
 using .Meshing
 
+using StructsOfArrays
+
 struct GPU <: Meshing.Backend end
 import .Meshing: storage, overelems
 
 function storage(::Type{T}, mesh::PeriodicCartesianMesh{N, GPU}) where {T, N}
     inds = elems(mesh)
-    underlying = CuArray{T}(undef, map(length, axes(inds))...)
+    underlying = StructOfArrays(T, CuArray, map(length, axes(inds))...)
     return OffsetArray(underlying, inds.indices)
 end
 
@@ -21,8 +23,8 @@ function storage(::Type{T}, mesh::GhostCartesianMesh{N, GPU}) where {T, N}
         (first(I)-1):(last(I)+1)
     end
 
-    underlaying = CuArray{T}(undef, map(length, inds)...)
-    return OffsetArray(underlaying, inds)
+    underlying = StructOfArrays(T, CuArray, map(length, inds)...)
+    return OffsetArray(underlying, inds)
 end
 
 function overelems(f::F, mesh::CartesianMesh{N, GPU}, args...) where {F, N}
@@ -48,10 +50,10 @@ function overelems(f::F, mesh::CartesianMesh{N, GPU}, args...) where {F, N}
         threads = min(n, CUDAnative.maxthreads(kernel))
         blocks = ceil(Int, n / threads)
 
-        @info("kernel configuration", N, threads, blocks,
-            CUDAnative.maxthreads(kernel),
-            CUDAnative.registers(kernel),
-            CUDAnative.memory(kernel))
+        # @info("kernel configuration", N, threads, blocks,
+        #     CUDAnative.maxthreads(kernel),
+        #     CUDAnative.registers(kernel),
+        #     CUDAnative.memory(kernel))
 
         kernel(kernel_args...; threads=threads, blocks=blocks)
     end
@@ -69,8 +71,10 @@ _adapt(x::Tuple) = map(_adapt, x)
 _adapt(x::AbstractArray) = adapt(CuArray, x)
 using StaticArrays
 _adapt(x::StaticArray) = x
-_adapt(mesh::PeriodicCartesianMesh) where N = PeriodicCartesianMesh(GPU(), mesh.inds)
-_adapt(mesh::GhostCartesianMesh) where N = GhostCartesianMesh(GPU(), mesh.inds)
+_adapt(mesh::PeriodicCartesianMesh) = PeriodicCartesianMesh(GPU(), mesh.inds)
+_adapt(mesh::GhostCartesianMesh) = GhostCartesianMesh(GPU(), mesh.inds)
+_adapt(mesh::LocalCartesianMesh) = LocalCartesianMesh(_adapt(mesh.mesh), mesh.neighbor_ranks, map(_adapt, mesh.synced_storage))
+
 
 Adapt.adapt_structure(to, x::OffsetArray) = OffsetArray(adapt(to, parent(x)), x.offsets)
 Base.Broadcast.BroadcastStyle(::Type{<:OffsetArray{<:Any, <:Any, AA}}) where AA = Base.Broadcast.BroadcastStyle(AA)

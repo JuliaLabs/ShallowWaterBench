@@ -132,10 +132,11 @@ end
 #A basis which is an outer product of one-dimensional bases
 struct ProductBasis{T, N, B <: Tuple{Vararg{OrthoBasis{T, 1}, N}}} <: OrthoBasis{T, N, Fun{T, N}}
     bases::B
-    ProductBasis(basis::OrthoBasis{T, 1}) where {T} = new{T, 1, Tuple{typeof(basis)}}((basis,))
-    ProductBasis(bases::OrthoBasis{T, 1}...) where {T} = new{T, length(bases), typeof(bases)}(bases)
 end
-#ProductBasis{T, N, B}() where {T, N, B} = ProductBasis((b() for b in B.parameters)...)
+ProductBasis(basis::OrthoBasis{T, 1}) where {T} = ProductBasis{T, 1, Tuple{typeof(basis)}}((basis,))
+ProductBasis(bases::OrthoBasis{T, 1}...) where {T} = ProductBasis{T, length(bases), typeof(bases)}(bases)
+ProductBasis{T, N, B}() where {T, N, B} = ProductBasis((b() for b in B.parameters)...)
+
 Base.size(b::ProductBasis) = map(length, b.bases)
 Base.eltype(b::ProductBasis{T, N}) where {T, N} = ProductFun{T, N, Tuple{map(eltype, b.bases)...}}
 Base.@propagate_inbounds function Base.getindex(b::ProductBasis, i::Int...)::eltype(b)
@@ -228,7 +229,7 @@ end
 struct LagrangeBasis{T, P <: AbstractVector{T}} <: OrthoBasis{T, 1, LagrangeFun{T, P}}
     points::P
 end
-#LagrangeBasis{T, P}() where {T, P <: AbstractVector{T}} = LagrangeBasis{T, P}(P())
+LagrangeBasis{T, P}() where {T, P <: AbstractVector{T}} = LagrangeBasis{T, P}(P())
 
 Base.size(b::LagrangeBasis) = size(b.points)
 @inline Base.getindex(b::LagrangeBasis, i::Int) = LagrangeFun(b.points, i)

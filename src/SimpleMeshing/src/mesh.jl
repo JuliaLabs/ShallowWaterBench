@@ -5,6 +5,7 @@ module Meshing
 
 using Base.Cartesian
 using OffsetArrays
+using StructsOfArrays
 
 abstract type Backend end
 struct CPU <: Backend end
@@ -146,6 +147,7 @@ end
 
 function storage(::Type{T}, mesh::PeriodicCartesianMesh{N, CPU}) where {T, N}
     inds = elems(mesh)
+    # underlying = StructOfArrays(T, Array, map(length, axes(inds))...)
     underlying = Array{T}(undef, map(length, axes(inds))...)
     return OffsetArray(underlying, inds.indices)
 end
@@ -202,8 +204,9 @@ function storage(::Type{T}, mesh::GhostCartesianMesh{N, CPU}) where {T, N}
         (first(I)-1):(last(I)+1)
     end
 
-    underlaying = Array{T}(undef, map(length, inds)...)
-    return OffsetArray(underlaying, inds)
+    # underlying = StructOfArrays(T, Array, map(length, inds)...)
+    underlying = Array{T}(undef, map(length, inds)...)
+    return OffsetArray(underlying, inds)
 end
 
 # TODO: refactor boundaries and ghostboundaries

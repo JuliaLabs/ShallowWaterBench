@@ -5,6 +5,8 @@ export localpart, neighbor_ranks, sync_ghost!,
        fill_sendbufs!, flush_recvbufs!, async_send!, async_recv!,
        wait_send, wait_recv
 
+export LocalCartesianMesh
+
 """
     LocalCartesianMesh(G, neighbors)
 """
@@ -32,8 +34,13 @@ Track the ghost cells of this array, communicate them in `async_send!` and `asyn
 function sync_ghost!(mesh::LocalCartesianMesh, x::OffsetArray)
     bs = boundaries(mesh)
 
-    recv_bufs = map(idxs -> Array{eltype(x)}(undef, size(idxs)), bs)
-    send_bufs = map(idxs -> Array{eltype(x)}(undef, size(idxs)), bs)
+    if haskey(ENV, "MPI_CUDA_SUPPORT")
+        recv_bufs = map(idxs -> similar(parent(x), eltype(x), size(idxs)), bs)
+        send_bufs = map(idxs -> similar(parent(x), eltype(x), size(idxs)), bs)
+    else
+        recv_bufs = map(idxs -> Array{eltype(x)}(undef, size(idxs)), bs)
+        send_bufs = map(idxs -> Array{eltype(x)}(undef, size(idxs)), bs)
+    end
 
     recv_reqs = fill(MPI.REQUEST_NULL, length(bs))
     send_reqs = fill(MPI.REQUEST_NULL, length(bs))
