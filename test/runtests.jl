@@ -17,3 +17,12 @@ for example in examples
     cmd = `$(Base.julia_cmd()) --project=$(Base.current_project()) $example`
     @test success(pipeline(cmd, stderr=stderr))
 end
+
+include("reference.jl")
+
+@testset "Correctness check" begin
+    include("../shallower_water.jl")
+    h_test = map(t->Array(t.coeffs), main()[1:10, 1:10])
+    h_ref = Reference.reference()
+    @test h_test ≈ h_ref atol=1e-3
+end
