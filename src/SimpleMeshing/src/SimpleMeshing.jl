@@ -2,8 +2,8 @@ module SimpleMeshing
 
 export Meshing, Partitions
 
-include("mesh.jl")
 include("partitions.jl")
+include("mesh.jl")
 
 ###
 # Hacks

@@ -38,12 +38,18 @@ uuid = "c5f51814-7f29-56b8-a69c-e4d8f6be1fde"
 version = "0.8.6"
 
 [[CUDAnative]]
-deps = ["Adapt", "CUDAapi", "CUDAdrv", "InteractiveUtils", "LLVM", "Libdl", "Logging", "Pkg", "Printf"]
-git-tree-sha1 = "41dedb251d00e66bc9f0eed910f0bb3501f4413e"
-repo-rev = "tb/nothrow"
-repo-url = "https://github.com/JuliaGPU/CUDAnative.jl.git"
+deps = ["Adapt", "CUDAapi", "CUDAdrv", "InteractiveUtils", "LLVM", "Libdl", "Pkg", "Printf", "Statistics", "Test"]
+git-tree-sha1 = "ee585a140c32abb9d3d3a903145ce46c69bc4507"
 uuid = "be33ccc6-a3ff-5ff2-a52e-74243cff1e17"
-version = "0.10.0+"
+version = "0.10.1"
+
+[[Canary]]
+deps = ["MPI"]
+git-tree-sha1 = "ae0d5c23e2dbca710e197e71cf5a3f6d3805c469"
+repo-rev = "master"
+repo-url = "https://github.com/climate-machine/Canary.jl"
+uuid = "f104530e-ab06-11e8-1c1e-6d6e4a5d5c91"
+version = "0.1.0"
 
 [[CommonSubexpressions]]
 deps = ["Test"]
@@ -125,10 +131,10 @@ git-tree-sha1 = "f0016298a7c7c8f36a7a94694b6be5e8f663a948"
 repo-rev = "master"
 repo-url = "https://github.com/JuliaGPU/GPUArrays.jl.git"
 uuid = "0c68f7d7-f131-5f86-a1c3-88cf8149b2d7"
-version = "0.5.0+"
+version = "0.6.0+"
 
 [[GPUMeshing]]
-deps = ["Adapt", "CUDAdrv", "CUDAnative", "CuArrays", "GPUArrays", "MPI", "OffsetArrays", "SimpleMeshing", "StructsOfArrays", "TotallyNotApproxFun"]
+deps = ["Adapt", "CUDAdrv", "CUDAnative", "Canary", "CuArrays", "GPUArrays", "MPI", "OffsetArrays", "SimpleMeshing", "StaticArrays", "StructsOfArrays", "TotallyNotApproxFun"]
 path = "../src/GPUMeshing"
 uuid = "e13cbf70-dde4-11e8-20f0-c12cd972e7c8"
 version = "0.0.0"
@@ -238,7 +244,7 @@ deps = ["Distributed", "Mmap", "Random", "Serialization"]
 uuid = "1a1011a3-84de-559e-8e89-a11a2f7dc383"
 
 [[SimpleMeshing]]
-deps = ["OffsetArrays"]
+deps = ["MPI", "OffsetArrays"]
 path = "../src/SimpleMeshing"
 uuid = "c9d4e704-dde4-11e8-203c-b9e6aaa84b04"
 version = "0.0.0"
@@ -277,7 +283,7 @@ deps = ["Distributed", "InteractiveUtils", "Logging", "Random"]
 uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [[TotallyNotApproxFun]]
-deps = ["FastGaussQuadrature", "LinearAlgebra", "StaticArrays"]
+deps = ["Canary", "FastGaussQuadrature", "LinearAlgebra", "StaticArrays"]
 path = "../src/TotallyNotApproxFun"
 uuid = "ac408ca2-de02-11e8-2e84-c5797921eb19"
 version = "0.0.0"
@@ -289,7 +295,7 @@ uuid = "30578b45-9adc-5946-b283-645ec420af67"
 version = "0.4.0"
 
 [[UUIDs]]
-deps = ["Random", "SHA"]
+deps = ["Random"]
 uuid = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 
 [[Unicode]]
