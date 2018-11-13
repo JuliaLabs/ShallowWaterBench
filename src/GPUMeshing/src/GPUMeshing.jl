@@ -71,8 +71,10 @@ _adapt(x::Tuple) = map(_adapt, x)
 _adapt(x::AbstractArray) = adapt(CuArray, x)
 using StaticArrays
 _adapt(x::StaticArray) = x
-_adapt(mesh::PeriodicCartesianMesh) where N = PeriodicCartesianMesh(GPU(), mesh.inds)
-_adapt(mesh::GhostCartesianMesh) where N = GhostCartesianMesh(GPU(), mesh.inds)
+_adapt(mesh::PeriodicCartesianMesh) = PeriodicCartesianMesh(GPU(), mesh.inds)
+_adapt(mesh::GhostCartesianMesh) = GhostCartesianMesh(GPU(), mesh.inds)
+_adapt(mesh::LocalCartesianMesh) = LocalCartesianMesh(_adapt(mesh.mesh), mesh.neighbor_ranks, map(_adapt, mesh.synced_storage))
+
 
 Adapt.adapt_structure(to, x::OffsetArray) = OffsetArray(adapt(to, parent(x)), x.offsets)
 Base.Broadcast.BroadcastStyle(::Type{<:OffsetArray{<:Any, <:Any, AA}}) where AA = Base.Broadcast.BroadcastStyle(AA)
