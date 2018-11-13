@@ -5,7 +5,7 @@ using Base.Iterators
 using LinearAlgebra
 using Canary
 
-export Fun, ComboFun, approximate, ProductFun, LagrangeFun, VectorFun, MultilinearFun
+export Fun, LinearCombinationFun, approximate, ProductFun, LagrangeFun, VectorFun, MultilinearFun
 export Basis, OrthoBasis, ProductBasis, LagrangeBasis
 export points, LobattoPoints
 export normal
@@ -38,18 +38,18 @@ value(f::Fun{T, N}) where {T, N} = f(@SVector zeros(N))
 abstract type Basis{T, N, F<:Fun{T, N}} <: AbstractArray{F, N} end
 
 #A function represented by a linear combination of basis functions
-struct ComboFun{T, N, B<:Basis{<:Any, N}, C<:AbstractArray{T}} <: Fun{T, N}
+struct LinearCombinationFun{T, N, B<:Basis{<:Any, N}, C<:AbstractArray{T}} <: Fun{T, N}
     basis::B
     coeffs::C
-    function ComboFun(basis::B, coeffs::C) where {T, N, B<:Basis{<:Any, N}, C<:AbstractArray{T}}
+    function LinearCombinationFun(basis::B, coeffs::C) where {T, N, B<:Basis{<:Any, N}, C<:AbstractArray{T}}
         DEBUG && @assert length(basis) == length(coeffs)
         new{T, N, B, C}(basis, coeffs)
     end
 end
 
-(f::ComboFun)(x...) = apply(f, SVector(x...))
+(f::LinearCombinationFun)(x...) = apply(f, SVector(x...))
 #f(x) is just sum_i(c_i * b_i(x))
-@inline function apply(f::ComboFun, x::AbstractVector)
+@inline function apply(f::LinearCombinationFun, x::AbstractVector)
     #sum(f.coeffs .* apply.(f.basis, Ref(x)))
     i = first(eachindex(f.coeffs))
     y = f.coeffs[i] * apply(f.basis[i], x)
@@ -63,31 +63,31 @@ end
 #A basis corresponding to a set of points, where the basis function i is one(T) at point i and zero(T) everywhere else
 abstract type OrthoBasis{T, N, F} <: Basis{T, N, F} end
 points(::OrthoBasis) = error("Subtypes of OrthoBasis must define the points function")
-approximate(f, b::OrthoBasis) = ComboFun(b, map(f, points(b)))
+approximate(f, b::OrthoBasis) = LinearCombinationFun(b, map(f, points(b)))
 
 for op in (:(Base.:+), :(Base.:-), :(Base.zero), :(LinearAlgebra.transpose), :(LinearAlgebra.adjoint), :(LinearAlgebra.norm), :(Base.exp), :(Base.sqrt), :(Base.abs))
     @eval begin
-        @inline function $(op)(a::ComboFun{T, N, B}) where {T, N, B <: OrthoBasis}
-            ComboFun(a.basis, map($op, a.coeffs))
+        @inline function $(op)(a::LinearCombinationFun{T, N, B}) where {T, N, B <: OrthoBasis}
+            LinearCombinationFun(a.basis, map($op, a.coeffs))
         end
     end
 end
 for op in (:(Base.:+), :(Base.:-), :(Base.:*), :(Base.:/), :(Base.exp), :(Base.:^), :(Base.max))
     @eval begin
-        @inline function $op(a::ComboFun{T, N, B}, b::ComboFun{S, N, B}) where {T, S, N, B <: OrthoBasis}
+        @inline function $op(a::LinearCombinationFun{T, N, B}, b::LinearCombinationFun{S, N, B}) where {T, S, N, B <: OrthoBasis}
             DEBUG && @assert a.basis == b.basis
-            ComboFun(a.basis, map($op, a.coeffs, b.coeffs))
+            LinearCombinationFun(a.basis, map($op, a.coeffs, b.coeffs))
         end
-        @inline function $op(a::ComboFun{T, N, B}, b) where {T, N, B <: OrthoBasis}
-            ComboFun(a.basis, map(x->$op(x, b), a.coeffs))
+        @inline function $op(a::LinearCombinationFun{T, N, B}, b) where {T, N, B <: OrthoBasis}
+            LinearCombinationFun(a.basis, map(x->$op(x, b), a.coeffs))
         end
-        @inline function $op(a::ComboFun{T, N, B}, b::Fun) where {T, N, B <: OrthoBasis}
+        @inline function $op(a::LinearCombinationFun{T, N, B}, b::Fun) where {T, N, B <: OrthoBasis}
             throw(NotImplementedError())
         end
-        @inline function $op(a, b::ComboFun{T, N, B}) where {T, N, B <: OrthoBasis}
-            ComboFun(b.basis, map(x->$op(a, x), b.coeffs))
+        @inline function $op(a, b::LinearCombinationFun{T, N, B}) where {T, N, B <: OrthoBasis}
+            LinearCombinationFun(b.basis, map(x->$op(a, x), b.coeffs))
         end
-        @inline function $op(a::Fun, b::ComboFun{T, N, B}) where {T, N, B <: OrthoBasis}
+        @inline function $op(a::Fun, b::LinearCombinationFun{T, N, B}) where {T, N, B <: OrthoBasis}
             throw(NotImplementedError())
         end
     end
@@ -146,14 +146,14 @@ points(b::ProductBasis) = SVector.(collect(product(map(points, b.bases)...)))
 #Base.Broadcast.broadcastable(b::ProductBasis) = SArray{Tuple{size(b)...}}(b) #TODO generalize to non-static children
 
 #=
-function Base.getindex(f::ComboFun{<:Any, N, <:ProductBasis}, I::CartesianIndex{N}) where {N}
+function Base.getindex(f::LinearCombinationFun{<:Any, N, <:ProductBasis}, I::CartesianIndex{N}) where {N}
     I = Tuple(I)
     basis = ProductBasis(f.basis.bases[findall(iszero, I)]...)
     coeffs = f.coeffs[ntuple(n -> I[n] == 0 ? Colon() : (I[n] == 1 ? lastindex(f.coeffs, n) : 1), N)...]
-    return ComboFun(basis, coeffs)
+    return LinearCombinationFun(basis, coeffs)
 end
 
-function Base.setindex!(f::ComboFun{<:Any, N, <:ProductBasis}, g::ComboFun{<:Any, M, <:ProductBasis}, I::CartesianIndex{N}) where {N, M}
+function Base.setindex!(f::LinearCombinationFun{<:Any, N, <:ProductBasis}, g::LinearCombinationFun{<:Any, M, <:ProductBasis}, I::CartesianIndex{N}) where {N, M}
     I = Tuple(I)
     DEBUG && @assert ProductBasis(f.basis.bases[findall(iszero, I)]...) == g.basis
     f.coeffs[ntuple(n -> I[n] == 0 ? Colon() : (I[n] == 1 ? lastindex(f.coeffs, n) : 1), N)...] = g.coeffs
@@ -163,7 +163,7 @@ end
 
 normal(face::CartesianIndex) = SVector(face)
 
-@generated function Base.getindex(f::ComboFun{<:Any, N, <:ProductBasis}, I::CartesianIndex{N}) where {N}
+@generated function Base.getindex(f::LinearCombinationFun{<:Any, N, <:ProductBasis}, I::CartesianIndex{N}) where {N}
     thunk = quote
         Base.@_propagate_inbounds_meta
     end
@@ -173,7 +173,7 @@ normal(face::CartesianIndex) = SVector(face)
                 if I == CartesianIndex($(ntuple(n->n == dim ? offset : 0, N)...))
                     basis = ProductBasis($(ntuple(n->:(f.basis.bases[$(n >= dim ? n + 1 : n)]), N - 1)...))
                     coeffs = f.coeffs[$(ntuple(n->n == dim ? select : :(:), N)...)]
-                    return ComboFun(basis, coeffs)
+                    return LinearCombinationFun(basis, coeffs)
                 end
             end)
         end
@@ -182,7 +182,7 @@ normal(face::CartesianIndex) = SVector(face)
     return thunk
 end
 
-@generated function Base.setindex!(f::ComboFun{<:Any, N, <:ProductBasis}, g::ComboFun{<:Any, M, <:ProductBasis}, I::CartesianIndex{N}) where {N, M}
+@generated function Base.setindex!(f::LinearCombinationFun{<:Any, N, <:ProductBasis}, g::LinearCombinationFun{<:Any, M, <:ProductBasis}, I::CartesianIndex{N}) where {N, M}
     thunk = quote
         Base.@_propagate_inbounds_meta
     end
@@ -252,7 +252,7 @@ MultilinearFun(x₀, x₁, y₀, y₁) = MultilinearFun(SVector(x₀), SVector(x
 function MultilinearFun(x₀::SVector{N}, x₁::SVector{N}, y₀::SVector{N}, y₁::SVector{N}) where N
     basis = ProductBasis(ntuple(i->LagrangeBasis(SVector(x₀[i], x₁[i])), N)...)
     coeffs = map(SVector, collect(product(ntuple(i->SVector(y₀[i], y₁[i]), N)...)))
-    ComboFun(basis, coeffs)
+    LinearCombinationFun(basis, coeffs)
 end
 
 D(p) = spectralderivative(p)
@@ -264,7 +264,7 @@ D(p::SVector{N}) where {N} = SMatrix{N, N}(spectralderivative(p))
     end
 end
 
-∫(f::ComboFun) = sum(map(∫, f.basis) .* f.coeffs)
+∫(f::LinearCombinationFun) = sum(map(∫, f.basis) .* f.coeffs)
 
 ∫(f::ProductFun) = prod(map(∫, f.funs))
 
@@ -286,55 +286,55 @@ end
     end
 end
 
-∇(f::ComboFun) = sum(map(∇, f.basis) .* f)
+∇(f::LinearCombinationFun) = sum(map(∇, f.basis) .* f)
 
 function ∇(f::LagrangeFun) where {T, N}
-    return ComboFun(f.basis, D(f.points)[:, f.n])
+    return LinearCombinationFun(f.basis, D(f.points)[:, f.n])
 end
 
-function ∇(f::ComboFun{<:Any, 1, <:LagrangeBasis}) where {T, N}
-    return ComboFun(f.basis, D(f.basis.points) * f.coeffs)
+function ∇(f::LinearCombinationFun{<:Any, 1, <:LagrangeBasis}) where {T, N}
+    return LinearCombinationFun(f.basis, D(f.basis.points) * f.coeffs)
 end
 
-@inline function ∇(f::ComboFun{<:Any, 1, <:LagrangeBasis{<:Any, <:SVector{2}}})
+@inline function ∇(f::LinearCombinationFun{<:Any, 1, <:LagrangeBasis{<:Any, <:SVector{2}}})
     dx = (f.coeffs[2] - f.coeffs[1]) / (f.basis.points[2] - f.basis.points[1])
-    return ComboFun(f.basis, SVector(dx, dx))
+    return LinearCombinationFun(f.basis, SVector(dx, dx))
 end
 
-@inline function ∇(f::ComboFun{T, N, <:ProductBasis}) where {T, N}
-    partials = [dimsmapslices(n, c-> ∇(ComboFun(b, c)).coeffs, f.coeffs) for (n, b) in enumerate(f.basis.bases)]
-    ComboFun(f.basis, dimscat.(ndims(T) + 1, partials...))
+@inline function ∇(f::LinearCombinationFun{T, N, <:ProductBasis}) where {T, N}
+    partials = [dimsmapslices(n, c-> ∇(LinearCombinationFun(b, c)).coeffs, f.coeffs) for (n, b) in enumerate(f.basis.bases)]
+    LinearCombinationFun(f.basis, dimscat.(ndims(T) + 1, partials...))
 end
 
-function ∫∇Ψ(f::ComboFun) where {T, N}
-    return ComboFun(f.basis, map(b -> ∫(∇(b)' * f), f.basis))
+function ∫∇Ψ(f::LinearCombinationFun) where {T, N}
+    return LinearCombinationFun(f.basis, map(b -> ∫(∇(b)' * f), f.basis))
 end
 
-@inline function ∫∇Ψ(f::ComboFun{<:Any, 1, <:LagrangeBasis})
+@inline function ∫∇Ψ(f::LinearCombinationFun{<:Any, 1, <:LagrangeBasis})
     ω = map(∫, f.basis)
-    return ComboFun(f.basis, D(f.basis.points)' * (ω .* f.coeffs))
+    return LinearCombinationFun(f.basis, D(f.basis.points)' * (ω .* f.coeffs))
 end
 
-@inline function ∫∇Ψ(f::ComboFun{<:Any, 1, <:ProductBasis{<:Any, 1, <:Tuple{Vararg{<:LagrangeBasis}}}})
+@inline function ∫∇Ψ(f::LinearCombinationFun{<:Any, 1, <:ProductBasis{<:Any, 1, <:Tuple{Vararg{<:LagrangeBasis}}}})
     ω = map(∫, f.basis)
-    return ComboFun(f.basis, D(f.basis.bases[1].points)' * (ω .* f.coeffs))
+    return LinearCombinationFun(f.basis, D(f.basis.bases[1].points)' * (ω .* f.coeffs))
 end
 
-@inline function ∫∇Ψ(f::ComboFun{<:AbstractVector, 2, <:ProductBasis{<:Any, 2, <:Tuple{Vararg{<:LagrangeBasis}}}})
+@inline function ∫∇Ψ(f::LinearCombinationFun{<:AbstractVector, 2, <:ProductBasis{<:Any, 2, <:Tuple{Vararg{<:LagrangeBasis}}}})
     ω = map(∫, f.basis)
-    return ComboFun(f.basis, dimsmapslices(1, c->D(f.basis.bases[1].points)' * c, ω.*(getindex.(f.coeffs, 1))) +
+    return LinearCombinationFun(f.basis, dimsmapslices(1, c->D(f.basis.bases[1].points)' * c, ω.*(getindex.(f.coeffs, 1))) +
                              dimsmapslices(2, c->D(f.basis.bases[2].points)' * c, ω.*(getindex.(f.coeffs, 2))))
 end
 
-@inline function ∫∇Ψ(f::ComboFun{<:AbstractMatrix, 2, <:ProductBasis{<:Any, 2, <:Tuple{Vararg{<:LagrangeBasis}}}})
+@inline function ∫∇Ψ(f::LinearCombinationFun{<:AbstractMatrix, 2, <:ProductBasis{<:Any, 2, <:Tuple{Vararg{<:LagrangeBasis}}}})
     ω = map(∫, f.basis)
-    return ComboFun(f.basis, dimsmapslices(1, c->(Base.@_inline_meta; D(f.basis.bases[1].points)' * c), map(*, ω, map(c -> (Base.@_inline_meta; getindex(c, 1, :)), f.coeffs))) +
+    return LinearCombinationFun(f.basis, dimsmapslices(1, c->(Base.@_inline_meta; D(f.basis.bases[1].points)' * c), map(*, ω, map(c -> (Base.@_inline_meta; getindex(c, 1, :)), f.coeffs))) +
                              dimsmapslices(2, c->(Base.@_inline_meta; D(f.basis.bases[2].points)' * c), map(*, ω, map(c -> (Base.@_inline_meta; getindex(c, 2, :)), f.coeffs))))
 end
 
 
-function ∫Ψ(f::ComboFun)
-    return ComboFun(f.basis, f.coeffs .* map(∫, f.basis))
+function ∫Ψ(f::LinearCombinationFun)
+    return LinearCombinationFun(f.basis, f.coeffs .* map(∫, f.basis))
 end
 
 @inline function Base.collect(it::Base.Iterators.ProductIterator{TT}) where {TT<:Tuple{Vararg{LobattoPoints}}}

@@ -37,6 +37,12 @@ const _ξx, _ηx, _ξy, _ηy, _MJ, _MJI, _x, _y, = 1:_nvgeo
 
 const _nsgeo = 4
 const _nx, _ny, _sMJ, _vMJI = 1:_nsgeo
+
+# configurable for benchmarking
+const dim = parse(Int, get(ENV, "SHALLOW_WATER_DIM", "2"))
+const simsize = parse(Int, get(ENV, "SHALLOW_WATER_SIZE", "10"))
+const time_final = parse(Float64, get(ENV, "SHALLOW_WATER_TEND", "0.01"))
+const base_dt = parse(Float64, get(ENV, "SHALLOW_WATER_DT", "0.001"))
 # }}}
 
 # {{{ cfl
@@ -118,10 +124,10 @@ end
 
 # {{{ CPU Kernels
 # {{{ Volume RHS for 2D
+
 function volumerhs!(::Val{2}, ::Val{N}, rhs::Array, Q, vgeo, D, elems, gravity, δnl) where N
   DFloat = eltype(Q)
   Nq = N + 1
-  dim=2
   nelem = size(Q)[end]
 
   Q = reshape(Q, Nq, Nq, _nstate, nelem)
@@ -726,20 +732,20 @@ function lowstorageRK(::Val{dim}, ::Val{N}, mesh, vgeo, sgeo, Q, rhs, D,
       @show (step, nsteps, avg_stage_time)
     end
     # TODO: Fix VTK for 1-D
-    if dim > 0 && plotstep > 0 && step % plotstep == 0
-      Q .= d_QL
-      X = ntuple(j->reshape((@view vgeo[:, _x+j-1, :]), ntuple(j->N+1,dim)...,
-                            nelem), dim)
-      h = reshape((@view Q[:, _h, :]), ntuple(j->(N+1),dim)..., nelem)
-      b = reshape((@view Q[:, _b, :]), ntuple(j->(N+1),dim)..., nelem)
-      U = reshape((@view Q[:, _U, :]), ntuple(j->(N+1),dim)..., nelem) ./ (h.+b)
-      V = reshape((@view Q[:, _V, :]), ntuple(j->(N+1),dim)..., nelem) ./ (h.+b)
+    #if dim > 0 && plotstep > 0 && step % plotstep == 0
+    #  Q .= d_QL
+    #  X = ntuple(j->reshape((@view vgeo[:, _x+j-1, :]), ntuple(j->N+1,dim)...,
+    #                        nelem), dim)
+    #  h = reshape((@view Q[:, _h, :]), ntuple(j->(N+1),dim)..., nelem)
+    #  b = reshape((@view Q[:, _b, :]), ntuple(j->(N+1),dim)..., nelem)
+    #  U = reshape((@view Q[:, _U, :]), ntuple(j->(N+1),dim)..., nelem) ./ (h.+b)
+    #  V = reshape((@view Q[:, _V, :]), ntuple(j->(N+1),dim)..., nelem) ./ (h.+b)
 
-      writemesh(@sprintf("viz/swe%dD_%s_rank_%04d_step_%05d",
-                         dim, ArrType, mpirank, step), X...;
-                fields=(("h", h),("b",b),("U",U),("V",V),),
-                realelems=mesh.realelems)
-    end
+    #  writemesh(@sprintf("viz/swe%dD_%s_rank_%04d_step_%05d",
+    #                     dim, ArrType, mpirank, step), X...;
+    #            fields=(("h", h),("b",b),("U",U),("V",V),),
+    #            realelems=mesh.realelems)
+    #end
   end
 
   Q .= d_QL
@@ -801,9 +807,8 @@ function swe(::Val{dim}, ::Val{N}, mpicomm, ic, mesh, tend, gravity, δnl,
 
   # Compute time step
   mpirank == 0 && println("[CPU] computing dt (CPU)...")
-  base_dt = cfl(Val(dim), Val(N), vgeo, Q, mpicomm, gravity, δnl) / N^√2
+  #base_dt = cfl(Val(dim), Val(N), vgeo, Q, mpicomm, gravity, δnl) / N^√2
   #base_dt=0.025 #for case 20 with N=4 10x10x1
-  base_dt=0.001
   mpirank == 0 && @show base_dt
 
   nsteps = ceil(Int64, tend / base_dt)
@@ -813,22 +818,22 @@ function swe(::Val{dim}, ::Val{N}, mpicomm, ic, mesh, tend, gravity, δnl,
   # Do time stepping
   stats = zeros(DFloat, 3)
   mpirank == 0 && println("[CPU] computing initial energy...")
-  stats[1] = L2energysquared(Val(dim), Val(N), Q, vgeo, mesh.realelems)
+  #stats[1] = L2energysquared(Val(dim), Val(N), Q, vgeo, mesh.realelems)
 
   # plot the initial condition
-  mkpath("viz")
-  if dim > 0
-    X = ntuple(j->reshape((@view vgeo[:, _x+j-1, :]), ntuple(j->N+1,dim)...,
-                          nelem), dim)
-    h = reshape((@view Q[:, _h, :]), ntuple(j->(N+1),dim)..., nelem)
-    b = reshape((@view Q[:, _b, :]), ntuple(j->(N+1),dim)..., nelem)
-    U = reshape((@view Q[:, _U, :]), ntuple(j->(N+1),dim)..., nelem) ./ (h.+b)
-    V = reshape((@view Q[:, _V, :]), ntuple(j->(N+1),dim)..., nelem) ./ (h.+b)
-    writemesh(@sprintf("viz/swe%dD_%s_rank_%04d_step_%05d",
-                       dim, ArrType, mpirank, 0), X...;
-              fields=(("h", h),("b",b),("U",U),("V",V),),
-              realelems=mesh.realelems)
-  end
+  #mkpath("viz")
+  #if dim > 0
+  #  X = ntuple(j->reshape((@view vgeo[:, _x+j-1, :]), ntuple(j->N+1,dim)...,
+  #                        nelem), dim)
+  #  h = reshape((@view Q[:, _h, :]), ntuple(j->(N+1),dim)..., nelem)
+  #  b = reshape((@view Q[:, _b, :]), ntuple(j->(N+1),dim)..., nelem)
+  #  U = reshape((@view Q[:, _U, :]), ntuple(j->(N+1),dim)..., nelem) ./ (h.+b)
+  #  V = reshape((@view Q[:, _V, :]), ntuple(j->(N+1),dim)..., nelem) ./ (h.+b)
+  #  writemesh(@sprintf("viz/swe%dD_%s_rank_%04d_step_%05d",
+  #                     dim, ArrType, mpirank, 0), X...;
+  #            fields=(("h", h),("b",b),("U",U),("V",V),),
+  #            realelems=mesh.realelems)
+  #end
 
   mpirank == 0 && println("[DEV] starting time stepper...")
   lowstorageRK(Val(dim), Val(N), mesh, vgeo, sgeo, Q, rhs, D, dt, nsteps, tout,
@@ -836,18 +841,18 @@ function swe(::Val{dim}, ::Val{N}, mpicomm, ic, mesh, tend, gravity, δnl,
                ArrType=ArrType, plotstep=plotstep)
 
   mpirank == 0 && println("[CPU] computing final energy...")
-  stats[2] = L2energysquared(Val(dim), Val(N), Q, vgeo, mesh.realelems)
-  stats[3] = L2errorsquared(Val(dim), Val(N), Q, vgeo, mesh.realelems, Qexact,
-                            tend)
+  #stats[2] = L2energysquared(Val(dim), Val(N), Q, vgeo, mesh.realelems)
+  #stats[3] = L2errorsquared(Val(dim), Val(N), Q, vgeo, mesh.realelems, Qexact,
+  #                          tend)
 
-  stats = sqrt.(MPI.allreduce(stats, MPI.SUM, mpicomm))
+  #stats = sqrt.(MPI.allreduce(stats, MPI.SUM, mpicomm))
 
-  if  mpirank == 0
-    @show eng0 = stats[1]
-    @show engf = stats[2]
-    @show Δeng = engf - eng0
-    @show err = stats[3]
-  end
+ #if  mpirank == 0
+ #  @show eng0 = stats[1]
+ #  @show engf = stats[2]
+ #  @show Δeng = engf - eng0
+ #  @show err = stats[3]
+ #end
 end
 # }}}
 
@@ -865,14 +870,13 @@ function main()
   # FIXME: query via hostname
   @hascuda device!(mpirank % length(devices()))
 
+  println("Starting reference sim. dim=$dim; simsize=$simsize; tend=$time_final; base_dt=$base_dt")
   #Input Parameters
-  N=4
-  Ne=10
+  N=3
+  Ne=simsize
   iplot=10
   δnl=1
   icase=10
-  time_final=DFloat(0.32)
-  dim=2
   hardware=HAVE_CUDA ? "gpu" : "cpu"
 
   #Initial Conditions

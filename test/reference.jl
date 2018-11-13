@@ -4,6 +4,12 @@ module Reference
   using Canary
   using Printf: @sprintf
 
+  const dim     = parse(Int, get(ENV, "SHALLOW_WATER_DIM", "2"))
+  const simsize = parse(Int, get(ENV, "SHALLOW_WATER_SIZE", "10"))
+  const brickN  = ntuple(x->simsize, dim)
+  const tend    = parse(Float64, get(ENV, "SHALLOW_WATER_TEND", "0.01"))
+  const dt_env  = parse(Float64, get(ENV, "SHALLOW_WATER_DT", "0.001"))
+
   function reference()
 
     DFloat = Float64 #Number Type
@@ -13,17 +19,13 @@ module Reference
     # brickN(Ne) generates a brick-grid with Ne elements in each direction
     N = 3 #polynomial order
     #brickN = (10) #1D brickmesh
-    brickN = (10, 10) #2D brickmesh
-    tend = DFloat(0.005) #Final Time
     δnl = 1.0 #switch to turn on/off nonlinear equations
     gravity = 10.0 #gravity
     advection=false #Boolean to turn on/off advection or swe
 
 
     # ### The grid that we create determines the number of spatial dimensions that we are going to use.
-    dim = length(brickN)
-
-    # ###Output the polynomial order, space dimensions, and element configuration
+ ###Output the polynomial order, space dimensions, and element configuration
     println("N= ",N)
     println("dim= ",dim)
     println("brickN= ",brickN)
@@ -209,7 +211,7 @@ module Reference
     end
     dt = MPI.Allreduce(dt[1], MPI.MIN, mpicomm)
     dt = DFloat(dt / N^sqrt(2))
-    dt = 0.0025
+    dt = dt_env
     nsteps = ceil(Int64, tend / dt)
     dt = tend / nsteps
     @show (dt, nsteps)
