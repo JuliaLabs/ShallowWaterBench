@@ -7,24 +7,8 @@ using Base.Iterators
 using LinearAlgebra
 using Test
 using MPI
+include("constants.jl")
 
-const RKA = (Float64(0),
-             Float64(-567301805773)  / Float64(1357537059087),
-             Float64(-2404267990393) / Float64(2016746695238),
-             Float64(-3550918686646) / Float64(2091501179385),
-             Float64(-1275806237668) / Float64(842570457699 ))
-
-const RKB = (Float64(1432997174477) / Float64(9575080441755 ),
-             Float64(5161836677717) / Float64(13612068292357),
-             Float64(1720146321549) / Float64(2090206949498 ),
-             Float64(3134564353537) / Float64(4481467310338 ),
-             Float64(2277821191437) / Float64(14882151754819))
-
-const RKC = (Float64(0),
-             Float64(1432997174477) / Float64(9575080441755),
-             Float64(2526269341429) / Float64(6820363962896),
-             Float64(2006345519317) / Float64(3224310063776),
-             Float64(2802321613138) / Float64(2924317926251))
 const dim = 2
 const order = 3
 
@@ -45,12 +29,12 @@ function simulate(tend, mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, g, X⃗, dX�
             # Volume integral
             overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
             @inbounds begin
-                ht         = h[elem] + bathymetry[elem]
-                u⃗          = U⃗[elem] / ht
-                fluxh      = U⃗[elem]
-                Δh[elem]  += ∫∇Ψ(dX⃗ * fluxh * J)
-                fluxU⃗      = (u⃗ * u⃗' * ht) + I * g * (0.5 * h[elem]*h[elem] + h[elem] * bathymetry[elem])
-                ΔU⃗[elem]  += ∫∇Ψ(dX⃗ * fluxU⃗ * J)
+                hbₑ        = bathymetry[elem]
+                htₑ        = h[elem] + hbₑ
+                U⃗ₑ         = U⃗[elem]
+
+                Δh[elem]  += ∫∇Ψ(dX⃗ * U⃗ₑ * J)
+                ΔU⃗[elem]  += ∫∇Ψ(dX⃗ * (U⃗ₑ * U⃗ₑ' / htₑ + g * (htₑ^2 - hbₑ^2)/2 * I) * J)
             end
             end
 
