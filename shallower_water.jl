@@ -1,7 +1,7 @@
+using TotallyNotApproxFun
 using SimpleMeshing
 using .Meshing
 using .Partitions
-using TotallyNotApproxFun
 using StaticArrays
 using Base.Iterators
 using LinearAlgebra
@@ -10,9 +10,6 @@ using MPI
 include("constants.jl")
 
 const dim     = parse(Int, get(ENV, "SHALLOW_WATER_DIM", "2"))
-const simsize = parse(Int, get(ENV, "SHALLOW_WATER_SIZE", "10"))
-const tend    = parse(Float64, get(ENV, "SHALLOW_WATER_TEND", "0.01"))
-const base_dt = parse(Float64, get(ENV, "SHALLOW_WATER_DT", "0.001"))
 const order   = 3
 
 # - Check out the mathematical style of this code.
@@ -37,7 +34,12 @@ const order   = 3
 #     ask for your faces
 #     ask for your neighbor
 
-function simulate(tend, mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, g, X⃗, dX⃗, Î, Ψ, face_Js, M)
+function simulate(tend, base_dt, mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, g, X⃗, dX⃗, Î, Ψ, face_Js, M)
+    # Keep these 3 arrays in sync across workers
+    sync_ghost!(mesh, h)
+    sync_ghost!(mesh, bathymetry)
+    sync_ghost!(mesh, U⃗)
+
     nsteps = ceil(Int64, tend / base_dt)
     dt = tend / nsteps
 
@@ -115,11 +117,9 @@ end
 
 if Base.find_package("GPUMeshing") !== nothing
     using GPUMeshing
-    backend = GPU()
     GPUMeshing.CuArrays.allowscalar(false)
     adapt(x) = GPUMeshing._adapt(x)
 else
-    backend = CPU()
     adapt(x) = x
 end
 
@@ -128,15 +128,18 @@ MPI.finalize_atexit()
 
 const mpicomm = MPI.COMM_WORLD
 
-function main(tend=tend, backend=backend)
-    params = setup(backend)
-    simulate(tend, params...)
+function main()
+    tend   = parse(Float64, get(ENV, "SHALLOW_WATER_TEND", "0.01"))
+    base_dt = parse(Float64, get(ENV, "SHALLOW_WATER_DT", "0.001"))
+    simsize = parse(Int, get(ENV, "SHALLOW_WATER_SIZE", "10"))
+    println("Starting shallower sim. dim=$dim; simsize=$simsize; tend=$tend; base_dt=$base_dt")
+    params = setup(simsize)
+    simulate(tend, base_dt, params...)
 end
 
-function setup(backend)
+function setup(simsize)
     # Create a CPU mesh
-    println("Starting shallower sim. dim=$dim; simsize=$simsize; tend=$tend; base_dt=$base_dt")
-    globalMesh = PeriodicCartesianMesh(ntuple(i-> 1:simsize, dim); backend=backend)
+    globalMesh = PeriodicCartesianMesh(ntuple(i-> 1:simsize, dim))
     mesh = localpart(globalMesh, mpicomm)
 
     # the whole mesh will go from X⃗₀ to X⃗₁
@@ -176,13 +179,7 @@ function setup(backend)
     ΔU⃗         = myapproximate(x⃗ -> zero(x⃗))
     dX⃗         = ∇(X⃗[I⃗₀])(zero(Î))
     J          = inv(det(dX⃗))
-    g    = 10.0
-    #sJ         = det(∇(X⃗⁻¹[1][face]))
-
-    # Keep these 3 arrays in sync across workers
-    sync_ghost!(mesh, h)
-    sync_ghost!(mesh, bathymetry)
-    sync_ghost!(mesh, U⃗)
+    g          = 10.0
 
     elem₁ = first(elems(mesh))
     faces₁ = faces(elem₁, mesh)
@@ -203,6 +200,7 @@ end
 #      represent a mesh as just another type of Fun
 #      a mesh is an approximation of a function over a domain shape using little funs at each cell
 #      this abstraction allows us to automatically use more refined funs inside our little cells
+
 if abspath(PROGRAM_FILE) == @__FILE__
     main()
 end
