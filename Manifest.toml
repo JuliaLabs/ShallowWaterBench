@@ -126,7 +126,7 @@ deps = ["Distributed", "Mmap", "Random", "Serialization"]
 uuid = "1a1011a3-84de-559e-8e89-a11a2f7dc383"
 
 [[SimpleMeshing]]
-deps = ["MPI", "OffsetArrays"]
+deps = ["MPI", "OffsetArrays", "StructsOfArrays"]
 path = "src/SimpleMeshing"
 uuid = "c9d4e704-dde4-11e8-203c-b9e6aaa84b04"
 version = "0.0.0"
@@ -183,7 +183,7 @@ uuid = "30578b45-9adc-5946-b283-645ec420af67"
 version = "0.4.0"
 
 [[UUIDs]]
-deps = ["Random", "SHA"]
+deps = ["Random"]
 uuid = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 
 [[Unicode]]

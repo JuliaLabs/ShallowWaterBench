@@ -1,7 +1,7 @@
+using TotallyNotApproxFun
 using SimpleMeshing
 using .Meshing
 using .Partitions
-using TotallyNotApproxFun
 using StaticArrays
 using Base.Iterators
 using LinearAlgebra

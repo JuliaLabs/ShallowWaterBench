@@ -5,12 +5,14 @@ export GPU
 using SimpleMeshing
 using .Meshing
 
+using StructsOfArrays
+
 struct GPU <: Meshing.Backend end
 import .Meshing: storage, overelems
 
 function storage(::Type{T}, mesh::PeriodicCartesianMesh{N, GPU}) where {T, N}
     inds = elems(mesh)
-    underlying = CuArray{T}(undef, map(length, axes(inds))...)
+    underlying = StructOfArrays(T, CuArray, map(length, axes(inds))...)
     return OffsetArray(underlying, inds.indices)
 end
 
@@ -21,8 +23,8 @@ function storage(::Type{T}, mesh::GhostCartesianMesh{N, GPU}) where {T, N}
         (first(I)-1):(last(I)+1)
     end
 
-    underlaying = CuArray{T}(undef, map(length, inds)...)
-    return OffsetArray(underlaying, inds)
+    underlying = StructOfArrays(T, CuArray, map(length, inds)...)
+    return OffsetArray(underlying, inds)
 end
 
 function overelems(f::F, mesh::CartesianMesh{N, GPU}, args...) where {F, N}

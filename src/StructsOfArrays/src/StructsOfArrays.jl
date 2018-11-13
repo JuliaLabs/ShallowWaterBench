@@ -18,7 +18,7 @@ using Adapt
 """
     StructOfArrays{T, N, AT, U} <: AbstractArray{T,N}
 
-Transparent Struct of Arrays transformation. 
+Transparent Struct of Arrays transformation.
 Given an array like `Array{ComplexF64, 2}`, we want to represent it as:
 
 ```
@@ -31,7 +31,7 @@ getindex(A::ComplexArray, i) = ComplexF64(A.re[i], A.im[i])
 ```
 
 Since the memory-access patterns of `ComplexArray` are much more SIMD friendly than
-`Array{ComplexF64}`. This version of `StructOfArrays` also has a notion of underlying 
+`Array{ComplexF64}`. This version of `StructOfArrays` also has a notion of underlying
 storage and works both on CPU arrays and CuArrays. In most cases single field access of
 the struct should be fast as well since Julia and LLVM both do DCE.
 """
@@ -75,7 +75,8 @@ end
     types     = gather_eltypes(T)
     arrtypes  = map(t->_type_with_eltype(ArrayT, t, N), types)
     arrtuple  = Tuple{arrtypes...}
-    :(StructOfArrays{T,$N,$(pArrayT),$arrtuple}(($([:($(arrtypes[i])(uninitialized,dims)) for i = 1:length(types)]...),)))
+
+    :(StructOfArrays{T,$N,$(pArrayT),$arrtuple}(($([:($(arrtypes[i])(undef,dims)) for i = 1:length(types)]...),)))
 end
 StructOfArrays(T::Type, AT::Type, dims::Tuple{Vararg{Integer}}) = StructOfArrays(T, AT, dims...)
 
@@ -89,8 +90,17 @@ Base.print_array(::IO, ::StructOfArrays) = nothing
 function generate_getindex(T, getindex, arraynum)
     members = Expr[]
     for S in T.types
-        sizeof(S) == 0 && push!(members, :($(S())))
-        if isempty(S.types)
+        if sizeof(S) == 0
+            if S <: Tuple
+                exprs2 = Expr[]
+                for S2 in S.parameters
+                    push!(exprs2, :($(S2)()))
+                end
+                push!(members, Expr(:tuple, exprs2))
+            else
+                push!(members, :($(S)()))
+            end
+        elseif isempty(S.types)
             push!(members, :($(getindex)(A.arrays[$arraynum], i...)))
             arraynum += 1
         else
@@ -118,7 +128,9 @@ function generate_setindex(T, x, arraynum)
     s = gensym()
     exprs = Expr[:($s = $x)]
     for (el,S) in enumerate(T.types)
-        sizeof(S) == 0 && push!(exprs, :($(S())))
+        if sizeof(S) == 0
+            continue
+        end
         if isempty(S.types)
             push!(exprs, :(A.arrays[$arraynum][i...] = getfield($s, $el)))
             arraynum += 1

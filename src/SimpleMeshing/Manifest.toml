@@ -1,3 +1,9 @@
+[[Adapt]]
+deps = ["LinearAlgebra", "Test"]
+git-tree-sha1 = "04d15700419b6949d76be1428ab6e0277ff43b06"
+uuid = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
+version = "0.4.1"
+
 [[Base64]]
 uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 
@@ -97,6 +103,12 @@ uuid = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 [[Statistics]]
 deps = ["LinearAlgebra", "SparseArrays"]
 uuid = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+
+[[StructsOfArrays]]
+deps = ["Adapt"]
+path = "../StructsOfArrays"
+uuid = "bc3139fe-dde4-11e8-0467-3b5d72ee84e5"
+version = "0.0.0"
 
 [[Test]]
 deps = ["Distributed", "InteractiveUtils", "Logging", "Random"]
