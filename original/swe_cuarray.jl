@@ -41,7 +41,7 @@ const _nx, _ny, _sMJ, _vMJI = 1:_nsgeo
 # configurable for benchmarking
 const dim = parse(Int, get(ENV, "SHALLOW_WATER_DIM", "2"))
 const simsize = parse(Int, get(ENV, "SHALLOW_WATER_SIZE", "10"))
-const time_final = parse(Float64, get(ENV, "SHALLOW_WATER_TEND", "0.32"))
+const time_final = parse(Float64, get(ENV, "SHALLOW_WATER_TEND", "0.01"))
 const base_dt = parse(Float64, get(ENV, "SHALLOW_WATER_DT", "0.001"))
 # }}}
 

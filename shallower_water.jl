@@ -9,13 +9,33 @@ using Test
 using MPI
 include("constants.jl")
 
-
 const dim     = parse(Int, get(ENV, "SHALLOW_WATER_DIM", "2"))
 const simsize = parse(Int, get(ENV, "SHALLOW_WATER_SIZE", "10"))
-const tend    = parse(Float64, get(ENV, "SHALLOW_WATER_TEND", "0.32"))
+const tend    = parse(Float64, get(ENV, "SHALLOW_WATER_TEND", "0.01"))
 const base_dt = parse(Float64, get(ENV, "SHALLOW_WATER_DT", "0.001"))
 const order   = 3
 
+# - Check out the mathematical style of this code.
+# - This code runs as fast as ?
+# - This took three weeks for grad students in different disciplines (most of them
+#     unfamiliar with the math) and busy with problem sets and exams
+#
+# Why is this code both fast and beautiful?
+#
+# - `LinearCombinationFun` abstraction
+#   - Clean mathematical style of the code (Peter's favorite line)
+#   - Abstract away the basis functions
+#   - we don't have to change any of the next 100 lines to run in 5 dimensions
+#     Expansion to new basis functions (elements) and topologies
+#     Melding the discrete and the continuous
+#
+#   Mesh abstraction
+#     separates the concern of how to run on a different platform from what you're running
+#     we don't have to change any of the next 100 lines to run on GPU
+#     no sweat. no tears. no copy paste. (Valentin's favorite line)
+#
+#     ask for your faces
+#     ask for your neighbor
 
 function simulate(tend, mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, g, X⃗, dX⃗, Î, Ψ, face_Js, M)
     nsteps = ceil(Int64, tend / base_dt)
@@ -67,8 +87,8 @@ function simulate(tend, mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, g, X⃗, dX�
 
                     Δhₑ[face]  -= ∫Ψ(((U⃗ₑ + other_U⃗ₑ)' * normal(face) - λ * (other_hₑ - hₑ)) / 2 * face_J)
 
-                    flux       =  (      U⃗ₑ *       U⃗ₑ' /       htₑ + g * (      htₑ^2 -       hbₑ^2)/2 * I)
-                    other_flux =  (other_U⃗ₑ * other_U⃗ₑ' / other_htₑ + g * (other_htₑ^2 - other_hbₑ^2)/2 * I)
+                    flux       =  (      U⃗ₑ *       U⃗ₑ' /       htₑ + g * (      htₑ^2 -       hbₑ^2) / 2 * I)
+                    other_flux =  (other_U⃗ₑ * other_U⃗ₑ' / other_htₑ + g * (other_htₑ^2 - other_hbₑ^2) / 2 * I)
                     ΔU⃗ₑ[face]  -= ∫Ψ(((flux + other_flux)' * normal(face) - λ * (other_U⃗ₑ - U⃗ₑ)) / 2 * face_J)
                 end
                 Δh[elem] = LinearCombinationFun(Δhₑ.basis, SArray(Δhₑ.coeffs))
@@ -175,6 +195,14 @@ function setup(backend)
     return map(adapt, params)
 end
 
+# Future Work
+# 1. Add a domain shape abstraction (squares, triangles, blobs)
+# 2. Fuse with the ApproxFun ecosystem (make open source contributors work for you)
+# 3. abstracting the integration step into a larger framework such as DifferentialEquations.jl (try different integrators)
+# 4. Extend the Function Abstraction to Meshes (Powerful automatic mesh refinement that captures the math)
+#      represent a mesh as just another type of Fun
+#      a mesh is an approximation of a function over a domain shape using little funs at each cell
+#      this abstraction allows us to automatically use more refined funs inside our little cells
 if abspath(PROGRAM_FILE) == @__FILE__
     main()
 end

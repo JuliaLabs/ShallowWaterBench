@@ -7,7 +7,7 @@ module Reference
   const dim     = parse(Int, get(ENV, "SHALLOW_WATER_DIM", "2"))
   const simsize = parse(Int, get(ENV, "SHALLOW_WATER_SIZE", "10"))
   const brickN  = ntuple(x->simsize, dim)
-  const tend    = parse(Float64, get(ENV, "SHALLOW_WATER_TEND", "0.32"))
+  const tend    = parse(Float64, get(ENV, "SHALLOW_WATER_TEND", "0.01"))
   const dt_env  = parse(Float64, get(ENV, "SHALLOW_WATER_DT", "0.001"))
 
   function reference()
