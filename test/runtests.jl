@@ -18,8 +18,8 @@ for example in examples
     @test success(pipeline(cmd, stderr=stderr))
 end
 
-include("reference.jl")
 
+include("reference.jl")
 @testset "Correctness check" begin
     include("../shallower_water.jl")
     h_test = map(t->Array(t.coeffs), main()[1:10, 1:10])

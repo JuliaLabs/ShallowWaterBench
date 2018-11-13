@@ -9,64 +9,69 @@ using .Partitions
 using Test
 
 
+const mpicomm = MPI.COMM_WORLD
+const myrank = MPI.Comm_rank(mpicomm)
+const nprocesses = MPI.Comm_size(mpicomm)
+
 dim = 2
 
-ranks = convert(Array, reshape(0:(2^dim-1), ntuple(_->2, dim)))
+ranks = convert(Array, [0:nprocesses-1;]')
 
-globalInds = CartesianIndices(ntuple(i-> 1:1024, dim))
+if isinteger(sqrt(nprocesses))
+    a = Int(sqrt(nprocesses))
+    ranks = convert(Array, reshape(ranks, (a,a)))
+end
+
+if myrank==0
+    @show ranks
+end
+
+globalInds = CartesianIndices(ntuple(i-> 1:13, dim))
 globalMesh = PeriodicCartesianMesh(CartesianIndices(globalInds))
 
-const mpicomm = MPI.COMM_WORLD
-myrank = MPI.Comm_rank(mpicomm)
+mesh = localpart(globalMesh, mpicomm, ranks)
 
-P = CartesianPartition(globalInds, ranks)
-inds = rankindices(P, myrank)
+A = storage(Tuple{Int, CartesianIndex{dim}}, mesh)
+idxs = CartesianIndices(A)
 
-mesh = GhostCartesianMesh(CPU(), inds)
+println("RANK $myrank owns $(first(idxs)) to $(last(idxs))")
 
-let z = mpistorage(Complex{Int8}, mesh)
-    fill!(z, 42+42im)
+map!(x->(myrank, x), A, idxs) # fill elements with their own global index
 
-    for (bidx, buf) in zip(ghostboundaries(mesh), z.recv_buffers)
-        @test z[bidx] != buf
-    end
+sync_ghost!(mesh, A)
 
-    fill_sendbufs!(z, mesh)
+# It should still be the same
+@test A == tuple.(myrank, idxs)
 
-    for (bidx, buf) in zip(ghostboundaries(mesh), z.recv_buffers)
-        @test z[bidx] == buf
-    end
+async_send!(mesh)
+async_recv!(mesh)
+wait_send(mesh)
+wait_recv(mesh)
 
-    for buf in z.recv_buffers
-        fill!(buf, 1+1im)
-    end
-
-    flush_recvbufs!(z, mesh)
-    for (bidx, buf) in ghostboundaries(mesh)
-        @test all(z[bidx] .== 1+1im)
-    end
+P = CartesianPartition(elems(globalMesh), ranks)
+map(boundaries(mesh), ghostboundaries(mesh)) do b, gb
+    global_b = translate(globalMesh, gb)
+    proc = locate(P, global_b)
+    #try
+        @test A[gb] == tuple.(proc, global_b)
+    #catch err
+    #    myrank == 0 && rethrow(err)
+    #    exit(1)
+    #end
 end
 
+# Check Idempotency
 
-@show myrank
-s = mpistorage(Float64, mesh)
-fill!(s, myrank)
-P = CartesianPartition(globalInds, ranks)
+B = copy(A)
 
-nbs = map(ghostboundaries(mesh), boundaries(mesh)) do ghostelems, elems
-    locate(P, translate(globalMesh, ghostelems))
-end
+async_send!(mesh)
+async_recv!(mesh)
+wait_send(mesh)
+wait_recv(mesh)
 
-@time for iter = 1:30
-    async_recv!(s, mesh, nbs)
-    wait_send(s) # iter=1 this is a noop
-    overelems(mesh,iter, s) do elem, m, iter, s
-        ns = neighbors(elem, m)
-        s[elem] = sum(map(j->s[elem] * (iter-1), ns)) + s[elem]
-    end
-    async_send!(s, mesh, nbs)
-    wait_recv(s)
-    overelems(mesh,iter, s) do elem,m, iter, s
-        s[elem] = s[elem] / iter
-    end
+@test A == B
+
+# Reverse send
+map(boundaries(mesh), ghostboundaries(mesh)) do b, gb
+    A[b] .= A[gb] # prepare to send back what we got above
 end

@@ -6,8 +6,8 @@ import Printf: @sprintf
 # Configuration
 ##
 const DFloat    = Float64       # Number Type
-const N         = 1             # polynominal order
-const brickN    = (100, 100)    # 2D brickmesh
+const N         = 3             # polynominal order
+const brickN    = (10, 10)      # 2D brickmesh
 const tend      = DFloat(0.005) # Final Time
 const δnl       = 1.0           # switch to turn on/off nonlinear equations
 const gravity   = 10.0          # gravity
@@ -185,8 +185,9 @@ function main(mesh, Q, Δ, bathymetry, coord, metric, D, ω, vmapM, vmapP)
     err = L2energy(Δ, metric, ω, mesh.realelems)
     err = MPI.Allreduce(err, MPI.SUM, mpicomm)
     mpirank == 0 && @show sqrt(err)
+    return (mesh, Q.h)
 
 end
 
 include("setup.jl")
-main(mesh, Q, Δ, bathymetry, coord, metric, D, ω, vmapM, vmapP)
+(mesh, h) = main(mesh, Q, Δ, bathymetry, coord, metric, D, ω, vmapM, vmapP)
