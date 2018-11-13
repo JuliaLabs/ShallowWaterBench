@@ -7,20 +7,6 @@ git-tree-sha1 = "12093ca6cdd0ee547c39b1870e0c9c3f154d9ca9"
 uuid = "9e28174c-4ba2-5203-b857-d8d62c4213ee"
 version = "0.8.10"
 
-[[BinaryProvider]]
-deps = ["Libdl", "Pkg", "SHA", "Test"]
-git-tree-sha1 = "9930c1a6cd49d9fcd7218df6be417e6ae4f1468a"
-uuid = "b99e7846-7c00-51b0-8f62-c81ae34c0232"
-version = "0.5.2"
-
-[[Canary]]
-deps = ["MPI"]
-git-tree-sha1 = "ae0d5c23e2dbca710e197e71cf5a3f6d3805c469"
-repo-rev = "master"
-repo-url = "https://github.com/climate-machine/Canary.jl"
-uuid = "f104530e-ab06-11e8-1c1e-6d6e4a5d5c91"
-version = "0.1.0"
-
 [[Compat]]
 deps = ["Base64", "Dates", "DelimitedFiles", "Distributed", "InteractiveUtils", "LibGit2", "Libdl", "LinearAlgebra", "Markdown", "Mmap", "Pkg", "Printf", "REPL", "Random", "Serialization", "SharedArrays", "Sockets", "SparseArrays", "Statistics", "Test", "UUIDs", "Unicode"]
 git-tree-sha1 = "2d9e14d19bad3f9ad5cc5e4cffabc3cfa59de825"
@@ -38,12 +24,6 @@ uuid = "8bb1440f-4735-579b-a4ab-409b98df4dab"
 [[Distributed]]
 deps = ["LinearAlgebra", "Random", "Serialization", "Sockets"]
 uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
-
-[[FastGaussQuadrature]]
-deps = ["Compat", "LinearAlgebra", "SpecialFunctions"]
-git-tree-sha1 = "3861ecfe06076f9310a43469fbb676aaeba7893d"
-uuid = "442a2c76-b920-505d-bb47-c5924d526838"
-version = "0.3.2"
 
 [[InteractiveUtils]]
 deps = ["LinearAlgebra", "Markdown"]
@@ -114,18 +94,6 @@ uuid = "6462fe0b-24de-5631-8697-dd941f90decc"
 deps = ["LinearAlgebra", "Random"]
 uuid = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 
-[[SpecialFunctions]]
-deps = ["BinDeps", "BinaryProvider", "Libdl", "Test"]
-git-tree-sha1 = "0b45dc2e45ed77f445617b99ff2adf0f5b0f23ea"
-uuid = "276daf66-3868-5448-9aa4-cd146d93841b"
-version = "0.7.2"
-
-[[StaticArrays]]
-deps = ["InteractiveUtils", "LinearAlgebra", "Random", "Statistics", "Test"]
-git-tree-sha1 = "ebc5c2a27d91d5ec611a9861168182e2168effd3"
-uuid = "90137ffa-7385-5640-81b9-e52037218182"
-version = "0.9.2"
-
 [[Statistics]]
 deps = ["LinearAlgebra", "SparseArrays"]
 uuid = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
@@ -133,12 +101,6 @@ uuid = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 [[Test]]
 deps = ["Distributed", "InteractiveUtils", "Logging", "Random"]
 uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
-
-[[TotallyNotApproxFun]]
-deps = ["Canary", "FastGaussQuadrature", "LinearAlgebra", "StaticArrays"]
-path = "../TotallyNotApproxFun"
-uuid = "ac408ca2-de02-11e8-2e84-c5797921eb19"
-version = "0.0.0"
 
 [[URIParser]]
 deps = ["Test", "Unicode"]
