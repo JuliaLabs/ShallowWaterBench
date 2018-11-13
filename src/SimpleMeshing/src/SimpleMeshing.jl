@@ -19,6 +19,8 @@ Base.@propagate_inbounds function Base.getindex(A::OffsetArray{T,N}, I::Cartesia
     ret
 end
 
+import TotallyNotApproxFun
+
 include("precompile_SimpleMeshing.jl")
 _precompile_()
 
