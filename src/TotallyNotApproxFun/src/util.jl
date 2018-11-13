@@ -8,7 +8,7 @@ end
 
 @generated function _mapslices_exposition(::Val{dims}, f, a) where {dims}
     slicers = Array(collect(product((n in dims ? (:(Colon()),) : 1:size(a)[n] for n = 1:ndims(a))...)))
-    slices = map(slicer -> :(f(a[$(slicer...)])), slicers)
+    slices = map(slicer -> :(f(@inbounds(a[$(slicer...)]))), slicers)
     return quote
         Base.@_inline_meta
         _mapslices_denoument(Val(size(a)), Val(dims), $(slices...))
@@ -57,7 +57,7 @@ end
 
 StaticArrays.SVector(i::CartesianIndex) = SVector(Tuple(i))
 
-function Base.collect(it::Base.Iterators.ProductIterator{TT}) where {TT<:Tuple{Vararg{SArray}}}
+@inline function Base.collect(it::Base.Iterators.ProductIterator{TT}) where {TT<:Tuple{Vararg{SArray}}}
     sproduct(it.iterators)
 end
 

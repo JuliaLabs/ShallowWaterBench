@@ -1,3 +1,5 @@
+name = "ShallowWaterBench"
+
 [deps]
 Canary = "f104530e-ab06-11e8-1c1e-6d6e4a5d5c91"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"

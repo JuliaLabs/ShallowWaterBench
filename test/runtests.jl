@@ -19,16 +19,10 @@ for example in examples
 end
 
 
+include("reference.jl")
 @testset "Correctness check" begin
-    let
-        include("../src/shallow_water.jl")
-        EtoC = [Int.((mesh.elemtocoord.*brickN[1])[:,4,i]) for i in 1:prod(brickN)]
-        global h1 = [Q.h[:,:,EtoC[i,j]] for i in 1:brickN[1], j in 1:brickN[2]]
-    end
-    let
-        include("../shallower_water.jl")
-        x = h_from_us
-        global h2 = map(t->Array(t.coeffs), x)
-    end
-    @test h1 == h2
+    include("../shallower_water.jl")
+    h_test = map(t->Array(t.coeffs), main()[1:10, 1:10])
+    h_ref = Reference.reference()
+    @test h_test ≈ h_ref atol=1e-3
 end

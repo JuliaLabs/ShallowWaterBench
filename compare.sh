@@ -1,4 +1,4 @@
 #!/bin/bash
 
-time julia --project=. -e "import Canary; include(joinpath(dirname(pathof(Canary)), \"..\", \"examples\", \"swe_array.jl\"))"
-time julia --project=. shallower_water.jl
+time julia --project=. -L original/swe_cuarray.jl -e " @time main()"
+time julia --project=. -L shallower_water.jl -e "main(); @time main()"
