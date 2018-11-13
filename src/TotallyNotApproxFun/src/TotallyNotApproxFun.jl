@@ -67,27 +67,27 @@ approximate(f, b::OrthoBasis) = ComboFun(b, map(f, points(b)))
 
 for op in (:(Base.:+), :(Base.:-), :(Base.zero), :(LinearAlgebra.transpose), :(LinearAlgebra.adjoint), :(LinearAlgebra.norm), :(Base.exp), :(Base.sqrt), :(Base.abs))
     @eval begin
-        function $(op)(a::ComboFun{T, N, B}) where {T, N, B <: OrthoBasis}
+        @inline function $(op)(a::ComboFun{T, N, B}) where {T, N, B <: OrthoBasis}
             ComboFun(a.basis, map($op, a.coeffs))
         end
     end
 end
 for op in (:(Base.:+), :(Base.:-), :(Base.:*), :(Base.:/), :(Base.exp), :(Base.:^), :(Base.max))
     @eval begin
-        function $op(a::ComboFun{T, N, B}, b::ComboFun{S, N, B}) where {T, S, N, B <: OrthoBasis}
+        @inline function $op(a::ComboFun{T, N, B}, b::ComboFun{S, N, B}) where {T, S, N, B <: OrthoBasis}
             DEBUG && @assert a.basis == b.basis
             ComboFun(a.basis, map($op, a.coeffs, b.coeffs))
         end
-        function $op(a::ComboFun{T, N, B}, b) where {T, N, B <: OrthoBasis}
+        @inline function $op(a::ComboFun{T, N, B}, b) where {T, N, B <: OrthoBasis}
             ComboFun(a.basis, map(x->$op(x, b), a.coeffs))
         end
-        function $op(a::ComboFun{T, N, B}, b::Fun) where {T, N, B <: OrthoBasis}
+        @inline function $op(a::ComboFun{T, N, B}, b::Fun) where {T, N, B <: OrthoBasis}
             throw(NotImplementedError())
         end
-        function $op(a, b::ComboFun{T, N, B}) where {T, N, B <: OrthoBasis}
+        @inline function $op(a, b::ComboFun{T, N, B}) where {T, N, B <: OrthoBasis}
             ComboFun(b.basis, map(x->$op(a, x), b.coeffs))
         end
-        function $op(a::Fun, b::ComboFun{T, N, B}) where {T, N, B <: OrthoBasis}
+        @inline function $op(a::Fun, b::ComboFun{T, N, B}) where {T, N, B <: OrthoBasis}
             throw(NotImplementedError())
         end
     end
@@ -296,12 +296,12 @@ function ∇(f::ComboFun{<:Any, 1, <:LagrangeBasis}) where {T, N}
     return ComboFun(f.basis, D(f.basis.points) * f.coeffs)
 end
 
-function ∇(f::ComboFun{<:Any, 1, <:LagrangeBasis{<:Any, <:SVector{2}}})
+@inline function ∇(f::ComboFun{<:Any, 1, <:LagrangeBasis{<:Any, <:SVector{2}}})
     dx = (f.coeffs[2] - f.coeffs[1]) / (f.basis.points[2] - f.basis.points[1])
     return ComboFun(f.basis, SVector(dx, dx))
 end
 
-function ∇(f::ComboFun{T, N, <:ProductBasis}) where {T, N}
+@inline function ∇(f::ComboFun{T, N, <:ProductBasis}) where {T, N}
     partials = [dimsmapslices(n, c-> ∇(ComboFun(b, c)).coeffs, f.coeffs) for (n, b) in enumerate(f.basis.bases)]
     ComboFun(f.basis, dimscat.(ndims(T) + 1, partials...))
 end
@@ -310,26 +310,26 @@ function ∫∇Ψ(f::ComboFun) where {T, N}
     return ComboFun(f.basis, map(b -> ∫(∇(b)' * f), f.basis))
 end
 
-function ∫∇Ψ(f::ComboFun{<:Any, 1, <:LagrangeBasis})
+@inline function ∫∇Ψ(f::ComboFun{<:Any, 1, <:LagrangeBasis})
     ω = map(∫, f.basis)
     return ComboFun(f.basis, D(f.basis.points)' * (ω .* f.coeffs))
 end
 
-function ∫∇Ψ(f::ComboFun{<:Any, 1, <:ProductBasis{<:Any, 1, <:Tuple{Vararg{<:LagrangeBasis}}}})
+@inline function ∫∇Ψ(f::ComboFun{<:Any, 1, <:ProductBasis{<:Any, 1, <:Tuple{Vararg{<:LagrangeBasis}}}})
     ω = map(∫, f.basis)
     return ComboFun(f.basis, D(f.basis.bases[1].points)' * (ω .* f.coeffs))
 end
 
-function ∫∇Ψ(f::ComboFun{<:AbstractVector, 2, <:ProductBasis{<:Any, 2, <:Tuple{Vararg{<:LagrangeBasis}}}})
+@inline function ∫∇Ψ(f::ComboFun{<:AbstractVector, 2, <:ProductBasis{<:Any, 2, <:Tuple{Vararg{<:LagrangeBasis}}}})
     ω = map(∫, f.basis)
     return ComboFun(f.basis, dimsmapslices(1, c->D(f.basis.bases[1].points)' * c, ω.*(getindex.(f.coeffs, 1))) +
                              dimsmapslices(2, c->D(f.basis.bases[2].points)' * c, ω.*(getindex.(f.coeffs, 2))))
 end
 
-function ∫∇Ψ(f::ComboFun{<:AbstractMatrix, 2, <:ProductBasis{<:Any, 2, <:Tuple{Vararg{<:LagrangeBasis}}}})
+@inline function ∫∇Ψ(f::ComboFun{<:AbstractMatrix, 2, <:ProductBasis{<:Any, 2, <:Tuple{Vararg{<:LagrangeBasis}}}})
     ω = map(∫, f.basis)
-    return ComboFun(f.basis, dimsmapslices(1, c->D(f.basis.bases[1].points)' * c, map(*, ω, map(c -> getindex(c, 1, :), f.coeffs))) +
-                             dimsmapslices(2, c->D(f.basis.bases[2].points)' * c, map(*, ω, map(c -> getindex(c, 2, :), f.coeffs))))
+    return ComboFun(f.basis, dimsmapslices(1, c->(Base.@_inline_meta; D(f.basis.bases[1].points)' * c), map(*, ω, map(c -> (Base.@_inline_meta; getindex(c, 1, :)), f.coeffs))) +
+                             dimsmapslices(2, c->(Base.@_inline_meta; D(f.basis.bases[2].points)' * c), map(*, ω, map(c -> (Base.@_inline_meta; getindex(c, 2, :)), f.coeffs))))
 end
 
 
@@ -337,7 +337,7 @@ function ∫Ψ(f::ComboFun)
     return ComboFun(f.basis, f.coeffs .* map(∫, f.basis))
 end
 
-function Base.collect(it::Base.Iterators.ProductIterator{TT}) where {TT<:Tuple{Vararg{LobattoPoints}}}
+@inline function Base.collect(it::Base.Iterators.ProductIterator{TT}) where {TT<:Tuple{Vararg{LobattoPoints}}}
     sproduct(it.iterators)
 end
 
