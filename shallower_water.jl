@@ -25,8 +25,12 @@ const RKC = (Float64(0),
              Float64(2526269341429) / Float64(6820363962896),
              Float64(2006345519317) / Float64(3224310063776),
              Float64(2802321613138) / Float64(2924317926251))
-const dim = 2
-const order = 3
+
+const dim     = parse(Int, get(ENV, "SHALLOW_WATER_DIM", "2"))
+const simsize = parse(Int, get(ENV, "SHALLOW_WATER_SIZE", "10"))
+const tend    = parse(Float64, get(ENV, "SHALLOW_WATER_TEND", "0.32"))
+const base_dt = parse(Float64, get(ENV, "SHALLOW_WATER_DT", "0.001"))
+const order   = 3
 
 if Base.find_package("GPUMeshing") !== nothing
     using GPUMeshing
@@ -43,14 +47,15 @@ MPI.finalize_atexit()
 
 const mpicomm = MPI.COMM_WORLD
 
-function main(tend=0.005, backend=backend)
+function main(tend=tend, backend=backend)
     params = setup(backend)
     compute(tend, params...)
 end
 
 function setup(backend)
     # Create a CPU mesh
-    globalMesh = PeriodicCartesianMesh(ntuple(i-> 1:10, dim); backend=backend)
+    println("Starting shallower sim. dim=$dim; simsize=$simsize; tend=$tend; base_dt=$base_dt")
+    globalMesh = PeriodicCartesianMesh(ntuple(i-> 1:simsize, dim); backend=backend)
     mesh = localpart(globalMesh, mpicomm)
 
     # the whole mesh will go from X⃗₀ to X⃗₁
@@ -111,8 +116,7 @@ end
 
 function compute(tend, mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, gravity, X⃗, dX⃗, Î, Ψ, Jfaces, M)
 
-    dt = 0.0025
-    nsteps = ceil(Int64, tend / dt)
+    nsteps = ceil(Int64, tend / base_dt)
     dt = tend / nsteps
 
     for step in 1:nsteps
