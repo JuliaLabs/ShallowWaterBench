@@ -14,7 +14,7 @@ const order = 3
 
 
 
-function simulate(tend, mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, g, X⃗, dX⃗, Î, Ψ, Jfaces, M)
+function simulate(tend, mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, g, X⃗, dX⃗, Î, Ψ, face_Js, M)
     dt = 0.0025
     nsteps = ceil(Int64, tend / dt)
     dt = tend / nsteps
@@ -43,34 +43,34 @@ function simulate(tend, mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, g, X⃗, dX�
             # Flux integral
             overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
             @inbounds begin
-                myΔh = ComboFun(Δh[elem].basis, MArray(Δh[elem].coeffs))
-                myΔU⃗ = ComboFun(ΔU⃗[elem].basis, MArray(ΔU⃗[elem].coeffs))
-                for (face, Jface) in zip(faces(elem, mesh), Jfaces)
-                    elem′ = neighbor(elem, face, mesh)
-                    face′ = opposite(face, elem′, mesh)
+                Δhₑ = ComboFun(Δh[elem].basis, MArray(Δh[elem].coeffs))
+                ΔU⃗ₑ = ComboFun(ΔU⃗[elem].basis, MArray(ΔU⃗[elem].coeffs))
+                for (face, face_J) in zip(faces(elem, mesh), face_Js)
+                    other_elem =  neighbor(elem, face, mesh)
+                    other_face =  opposite(face, other_elem, mesh)
 
-                    hs = h[elem][face]
-                    hb = bathymetry[elem][face]
+                    hₑ         =  h[elem][face]
+                    hbₑ        =  bathymetry[elem][face]
+                    htₑ        =  hₑ + hbₑ
+                    U⃗ₑ         =  U⃗[elem][face]
 
-                    ht        = hs + hb
-                    u⃗         = U⃗[elem][face] / ht
-                    fluxh     = U⃗[elem][face]
-                    fluxU⃗     = (u⃗ * u⃗' * ht) + I * g * (0.5 * hs^2 + hs * hb)
+                    other_hₑ   =  h[other_elem][other_face]
+                    other_hbₑ  =  bathymetry[other_elem][other_face]
+                    other_htₑ  =  hₑ + hbₑ
+                    other_U⃗ₑ   =  U⃗[other_elem][other_face]
 
-                    hs′ = h[elem′][face′]
-                    hb′ = bathymetry[elem′][face′]
 
-                    ht′        = hs′ + hb′
-                    u⃗′         = U⃗[elem′][face′] / ht′
-                    fluxh′     = U⃗[elem′][face′]
-                    fluxU⃗′     = (u⃗′ * u⃗′' * ht′) + I * g * (0.5 * hs′^2 + hs′ * hb′)
+                    λ          =  max( abs( normal(face)' *       U⃗ₑ/      htₑ) + sqrt(g *       htₑ),
+                                       abs(-normal(face)' * other_U⃗ₑ/other_htₑ) + sqrt(g * other_htₑ))
 
-                    λ         = max(abs(normal(face)' * u⃗) + sqrt(g * ht), abs(normal(face)' * u⃗′) + sqrt(g * ht′))
-                    myΔh[face]  -= ∫Ψ(((fluxh + fluxh′)' * normal(face) - (λ * (hs′ - hs))) / 2 * Jface)
-                    myΔU⃗[face] -= ∫Ψ(((fluxU⃗ + fluxU⃗′)' * normal(face) - (λ * (U⃗[elem′][face′] - U⃗[elem][face]))) / 2 * Jface)
+                    Δhₑ[face]  -= ∫Ψ(((U⃗ₑ + other_U⃗ₑ)' * normal(face) - λ * (other_hₑ - hₑ)) / 2 * face_J)
+
+                    flux       =  (      U⃗ₑ *       U⃗ₑ' /       htₑ + g * (      htₑ^2 -       hbₑ^2)/2 * I)
+                    other_flux =  (other_U⃗ₑ * other_U⃗ₑ' / other_htₑ + g * (other_htₑ^2 - other_hbₑ^2)/2 * I)
+                    ΔU⃗ₑ[face]  -= ∫Ψ(((flux + other_flux)' * normal(face) - λ * (other_U⃗ₑ - U⃗ₑ)) / 2 * face_J)
                 end
-                Δh[elem] = ComboFun(myΔh.basis, SArray(myΔh.coeffs))
-                ΔU⃗[elem] = ComboFun(myΔU⃗.basis, SArray(myΔU⃗.coeffs))
+                Δh[elem] = ComboFun(Δhₑ.basis, SArray(Δhₑ.coeffs))
+                ΔU⃗[elem] = ComboFun(ΔU⃗ₑ.basis, SArray(ΔU⃗ₑ.coeffs))
             end
             end
 
@@ -163,11 +163,11 @@ function setup(backend)
 
     elem₁ = first(elems(mesh))
     faces₁ = faces(elem₁, mesh)
-    Jfaces = SVector{length(faces₁)}([norm(∇(X⃗⁻¹[elem₁][face])(zero(Î))) for face in faces₁])
+    face_Js = SVector{length(faces₁)}([norm(∇(X⃗⁻¹[elem₁][face])(zero(Î))) for face in faces₁])
 
     M = ∫Ψ(approximate(x⃗ -> J, Ψ))
 
-    params = (mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, g, X⃗, dX⃗, Î, Ψ, Jfaces, M)
+    params = (mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, g, X⃗, dX⃗, Î, Ψ, face_Js, M)
 
     return map(adapt, params)
 end
