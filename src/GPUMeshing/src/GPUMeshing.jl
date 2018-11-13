@@ -50,10 +50,10 @@ function overelems(f::F, mesh::CartesianMesh{N, GPU}, args...) where {F, N}
         threads = min(n, CUDAnative.maxthreads(kernel))
         blocks = ceil(Int, n / threads)
 
-        @info("kernel configuration", N, threads, blocks,
-            CUDAnative.maxthreads(kernel),
-            CUDAnative.registers(kernel),
-            CUDAnative.memory(kernel))
+        # @info("kernel configuration", N, threads, blocks,
+        #     CUDAnative.maxthreads(kernel),
+        #     CUDAnative.registers(kernel),
+        #     CUDAnative.memory(kernel))
 
         kernel(kernel_args...; threads=threads, blocks=blocks)
     end
