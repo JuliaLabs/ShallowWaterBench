@@ -50,8 +50,8 @@ end
 
 function setup(backend)
     # Create a CPU mesh
-    globalMesh = PeriodicCartesianMesh(ntuple(i-> 1:10, dim); backend=backend)
-    mesh = localpart(globalMesh, mpicomm)
+    mesh = PeriodicCartesianMesh(ntuple(i-> 1:10, dim); backend=backend)
+#    mesh = localpart(globalMesh, mpicomm)
 
     # the whole mesh will go from X⃗₀ to X⃗₁
     # (to add a vector arrow to a quantity like `v⃗`, type `v\vec` and then press tab.)
@@ -94,9 +94,9 @@ function setup(backend)
     #sJ         = det(∇(X⃗⁻¹[1][face]))
 
     # Keep these 3 arrays in sync across workers
-    sync_ghost!(mesh, h)
-    sync_ghost!(mesh, bathymetry)
-    sync_ghost!(mesh, U⃗)
+    #sync_ghost!(mesh, h)
+    #sync_ghost!(mesh, bathymetry)
+    #sync_ghost!(mesh, U⃗)
 
     elem₁ = first(elems(mesh))
     faces₁ = faces(elem₁, mesh)
@@ -118,10 +118,9 @@ function compute(tend, mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, gravity, X⃗,
     for step in 1:nsteps
         for s in 1:length(RKA)
 
-            async_send!(mesh)
-            async_recv!(mesh)
-            # Flux integral
-            wait_send(mesh) # iter=1 this is a noop
+    #        async_send!(mesh)
+    #        async_recv!(mesh)
+    #        wait_send(mesh) # iter=1 this is a noop
 
             # Volume integral
             overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
@@ -135,8 +134,9 @@ function compute(tend, mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, gravity, X⃗,
             end
             end
 
-            wait_recv(mesh) # fill in data from previous iteration
+            #wait_recv(mesh) # fill in data from previous iteration
 
+            # Flux integral
             overelems(mesh, h, bathymetry, U⃗, Δh, ΔU⃗) do elem, mesh, h, bathymetry, U⃗, Δh, ΔU⃗
             @inbounds begin
                 myΔh = ComboFun(Δh[elem].basis, MArray(Δh[elem].coeffs))
@@ -171,8 +171,9 @@ function compute(tend, mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, gravity, X⃗,
             end
 
             # Update steps
-            s′ = mod1(s, length(RKA))
-            overelems(mesh, h, U⃗, Δh, ΔU⃗, M, RKA[s′], RKB[s], dt) do elem, mesh, h, U⃗, Δh, ΔU⃗, M, rka, rkb, dt
+            rka = RKA[s % length(RKA) + 1]
+            rkb = RKB[s]
+            overelems(mesh, h, U⃗, Δh, ΔU⃗, M, rka, rkb, dt) do elem, mesh, h, U⃗, Δh, ΔU⃗, M, rka, rkb, dt
             @inbounds begin
                 ## Assuming advection == false
                 h[elem] += rkb * dt * Δh[elem] / M
