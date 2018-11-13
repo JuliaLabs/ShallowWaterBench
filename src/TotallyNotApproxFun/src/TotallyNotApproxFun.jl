@@ -328,8 +328,8 @@ end
 
 @inline function ∫∇Ψ(f::ComboFun{<:AbstractMatrix, 2, <:ProductBasis{<:Any, 2, <:Tuple{Vararg{<:LagrangeBasis}}}})
     ω = map(∫, f.basis)
-    return ComboFun(f.basis, dimsmapslices(1, c->D(f.basis.bases[1].points)' * c, map(*, ω, map(c -> getindex(c, 1, :), f.coeffs))) +
-                             dimsmapslices(2, c->D(f.basis.bases[2].points)' * c, map(*, ω, map(c -> getindex(c, 2, :), f.coeffs))))
+    return ComboFun(f.basis, dimsmapslices(1, c->(Base.@_inline_meta; D(f.basis.bases[1].points)' * c), map(*, ω, map(c -> (Base.@_inline_meta; getindex(c, 1, :)), f.coeffs))) +
+                             dimsmapslices(2, c->(Base.@_inline_meta; D(f.basis.bases[2].points)' * c), map(*, ω, map(c -> (Base.@_inline_meta; getindex(c, 2, :)), f.coeffs))))
 end
 
 

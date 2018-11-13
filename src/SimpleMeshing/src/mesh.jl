@@ -128,12 +128,12 @@ PeriodicCartesianMesh(ranges::AbstractUnitRange...; backend = CPU()) = PeriodicC
 
 elems(mesh::PeriodicCartesianMesh) = mesh.inds
 
-Base.mod(x::T, y::AbstractUnitRange{T}) where {T<:Integer} = y[mod1(x - y[1] + 1, length(y))]
-Base.mod(x::CartesianIndex{N}, y::CartesianIndices{N}) where {N} = CartesianIndex(ntuple(n->mod(x[n], axes(y)[n]), Val(N)))
+@inline Base.mod(x::T, y::AbstractUnitRange{T}) where {T<:Integer} = @inbounds y[mod1(x - y[1] + 1, length(y))]
+@inline Base.mod(x::CartesianIndex{N}, y::CartesianIndices{N}) where {N} = CartesianIndex(ntuple(n->(Base.@_inline_meta; mod(x[n], axes(y)[n])), Val(N)))
 
 opposite(face, elem, mesh::PeriodicCartesianMesh) = -face
 
-function neighbor(elem::T, face, mesh::PeriodicCartesianMesh) where {T}
+@inline function neighbor(elem::T, face, mesh::PeriodicCartesianMesh) where {T}
     elem′ = (elem + face) in mesh.inds ? elem + face : mod(elem + face, mesh.inds)
     elem′::T
 end

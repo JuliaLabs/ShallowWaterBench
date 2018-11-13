@@ -8,7 +8,7 @@ end
 
 @generated function _mapslices_exposition(::Val{dims}, f, a) where {dims}
     slicers = Array(collect(product((n in dims ? (:(Colon()),) : 1:size(a)[n] for n = 1:ndims(a))...)))
-    slices = map(slicer -> :(f(a[$(slicer...)])), slicers)
+    slices = map(slicer -> :(f(@inbounds(a[$(slicer...)]))), slicers)
     return quote
         Base.@_inline_meta
         _mapslices_denoument(Val(size(a)), Val(dims), $(slices...))
