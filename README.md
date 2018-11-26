@@ -1,6 +1,6 @@
 # ShallowWaterBench
 
-Shallow water benchmarking expirment based of 
+Shallow water benchmarking experiment based of 
 https://github.com/climate-machine/Canary.jl/commit/a58ac057a7224f45bcc450ee533937f7bd06fe17
 
 ## Setup
