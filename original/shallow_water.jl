@@ -51,13 +51,13 @@ const DFloat = Float64 #Number Type
 # ### Define Input Parameters:
 # N is polynomial order and
 # brickN(Ne) generates a brick-grid with Ne elements in each direction
-N = 1 #polynomial order
-#brickN = (10) #1D brickmesh
-brickN = (100, 100) #2D brickmesh
-tend = DFloat(0.005) #Final Time
-δnl = 1.0 #switch to turn on/off nonlinear equations
-gravity = 10.0 #gravity
-advection=false #Boolean to turn on/off advection or swe
+N         = 1 #polynomial order
+#brickN   = (10) #1D brickmesh
+brickN    = (100, 100) #2D brickmesh
+tend      = DFloat(0.005) #Final Time
+δnl       = 1.0 #switch to turn on/off nonlinear equations
+gravity   = 10.0 #gravity
+advection = false #Boolean to turn on/off advection or swe
 
 # ### Load the MPI and Canary packages where Canary builds the mesh, generates basis functions, and metric terms.
 using MPI
@@ -68,13 +68,13 @@ using Printf: @sprintf
 dim = length(brickN)
 
 # ###Output the polynomial order, space dimensions, and element configuration
-println("N= ",N)
-println("dim= ",dim)
-println("brickN= ",brickN)
-println("DFloat= ",DFloat)
-println("δnl= ",δnl)
-println("gravity= ",gravity)
-println("advection= ",advection)
+println("N         = ",N)
+println("dim       = ",dim)
+println("brickN    = ",brickN)
+println("DFloat    = ",DFloat)
+println("δnl       = ",δnl)
+println("gravity   = ",gravity)
+println("advection = ",advection)
 
 # ### Initialize MPI and get the communicator, rank, and size
 MPI.Initialized() || MPI.Init() # only initialize MPI if not initialized
@@ -85,20 +85,20 @@ mpisize = MPI.Comm_size(mpicomm)
 
 # ### Generate a local view of a fully periodic Cartesian mesh.
 if dim == 1
-  (Nx, ) = brickN
+  (Nx, )  = brickN
   local x = range(DFloat(0); length=Nx+1, stop=1)
-  mesh = brickmesh((x, ), (true, ); part=mpirank+1, numparts=mpisize)
+  mesh    = brickmesh((x, ), (true, ); part=mpirank+1, numparts=mpisize)
 elseif dim == 2
   (Nx, Ny) = brickN
-  local x = range(DFloat(0); length=Nx+1, stop=1)
-  local y = range(DFloat(0); length=Ny+1, stop=1)
-  mesh = brickmesh((x, y), (true, true); part=mpirank+1, numparts=mpisize)
+  local x  = range(DFloat(0); length=Nx+1, stop=1)
+  local y  = range(DFloat(0); length=Ny+1, stop=1)
+  mesh     = brickmesh((x, y), (true, true); part=mpirank+1, numparts=mpisize)
 else
   (Nx, Ny, Nz) = brickN
-  local x = range(DFloat(0); length=Nx+1, stop=1)
-  local y = range(DFloat(0); length=Ny+1, stop=1)
-  local z = range(DFloat(0); length=Nz+1, stop=1)
-  mesh = brickmesh((x, y, z), (true, true, true); part=mpirank+1, numparts=mpisize)
+  local x      = range(DFloat(0); length=Nx+1, stop=1)
+  local y      = range(DFloat(0); length=Ny+1, stop=1)
+  local z      = range(DFloat(0); length=Nz+1, stop=1)
+  mesh         = brickmesh((x, y, z), (true, true, true); part=mpirank+1, numparts=mpisize)
 end
 
 # ### Partition the mesh using a Hilbert curve based partitioning
@@ -176,13 +176,13 @@ if dim == 1
     for i=1:length(coord.x)
         bathymetry[i]=0.1
     end
-    r=(x .- 0.5).^2
+    r    = (x .- 0.5).^2
     Q.h .= 0.5 .* exp.(-32.0 .* r)
     Q.U .= 0
     if (advection)
-        δnl=1.0
-        gravity=0.0
-        Q.U .= (Q.h+bathymetry) .* (1.0)
+        δnl     = 1.0
+        gravity = 0.0
+        Q.U    .= (Q.h+bathymetry) .* (1.0)
     end
     #=
   for i=1:length(coord.x)
@@ -196,15 +196,15 @@ elseif dim == 2
     for i=1:length(coord.x)
         bathymetry[i]=0.2
     end
-    r=(x .- 0.5).^2 + (y .- 0.5).^2
+    r    = (x .- 0.5).^2 + (y .- 0.5).^2
     Q.h .= 0.5 .* exp.(-100.0 .* r)
     Q.U .= 0
     Q.V .= 0
     if (advection)
-        δnl=1.0
-        gravity=0.0
-        Q.U .= (Q.h+bathymetry) .* (1.0)
-        Q.V .= (Q.h+bathymetry) .* (0.0)
+        δnl     = 1.0
+        gravity = 0.0
+        Q.U    .= (Q.h+bathymetry) .* (1.0)
+        Q.V    .= (Q.h+bathymetry) .* (0.0)
     end
 #=
     for i=1:length(coord.x)
@@ -228,7 +228,7 @@ end
 # This is done for each mpirank and then we do an MPI_Allreduce to find the global minimum.
 dt = [floatmax(DFloat)]
 if dim == 1
-    (ξx) = (metric.ξx)
+    (ξx)  = (metric.ξx)
     (h,U) = (Q.h+bathymetry,Q.U)
     for n = 1:length(U)
         loc_dt = (2h[n])  ./ (abs.(U[n] * ξx[n]))
@@ -237,7 +237,7 @@ if dim == 1
 elseif dim == 2
     (ξx, ξy) = (metric.ξx, metric.ξy)
     (ηx, ηy) = (metric.ηx, metric.ηy)
-    (h,U,V) = (Q.h+bathymetry,Q.U,Q.V)
+    (h,U,V)  = (Q.h+bathymetry,Q.U,Q.V)
     for n = 1:length(U)
         loc_dt = (2h[n]) ./ max(abs.(U[n] * ξx[n] + V[n] * ξy[n]),
                           abs.(U[n] * ηx[n] + V[n] * ηy[n]))
@@ -273,9 +273,9 @@ elseif dim == 2
   Δ.U .= Q.U
   Δ.V .= Q.V
 elseif dim == 3
-  u = Q.U ./ Q.h
-  v = Q.V ./ Q.h
-  w = Q.W ./ Q.h
+  u    = Q.U ./ Q.h
+  v    = Q.V ./ Q.h
+  w    = Q.W ./ Q.h
   Δ.h .= sin.(2 * π * (x - tend * u)) .* sin.(2 *  π * (y - tend * v)) .*
          sin.(2 * π * (z - tend * w)) .+ 2
   Δ.U .=  Q.U
@@ -322,18 +322,18 @@ RKC = (DFloat(0),
 # Volume RHS for 1D
 function volumerhs!(rhs, Q::NamedTuple{S, NTuple{2, T}}, bathymetry, metric, D, ω, elems, gravity, δnl) where {S, T}
   (rhsh, rhsU) = (rhs.h, rhs.U)
-  (h, U) = (Q.h, Q.U)
-  Nq = size(h, 1)
-  J = metric.J
-  ξx = metric.ξx
+  (h, U)       = (Q.h, Q.U)
+  Nq           = size(h, 1)
+  J            = metric.J
+  ξx           = metric.ξx
   for e ∈ elems
       #Get primitive variables and fluxes
-      hb=bathymetry[:,e]
-      hs=h[:,e]
-      ht=hs + hb
-      u=U[:,e] ./ ht
-      fluxh=U[:,e]
-      fluxU=(ht .* u .* u + 0.5 .* gravity .* hs .^2) .* δnl + gravity .* hs .* hb
+      hb    = bathymetry[:,e]
+      hs    = h[:,e]
+      ht    = hs + hb
+      u     = U[:,e] ./ ht
+      fluxh = U[:,e]
+      fluxU = (ht .* u .* u + 0.5 .* gravity .* hs .^2) .* δnl + gravity .* hs .* hb
 
       # loop of ξ-grid lines
       rhsh[:,e] += D' * (ω .* J[:,e] .* (ξx[:,e] .* fluxh[:]))
@@ -345,27 +345,27 @@ end #function volumerhs-1d
 function volumerhs!(rhs, Q::NamedTuple{S, NTuple{3, T}}, bathymetry, metric, D, ω, elems, gravity, δnl) where {S, T}
     (rhsh, rhsU, rhsV) = (rhs.h, rhs.U, rhs.V)
     (h, U, V) = (Q.h, Q.U, Q.V)
-    Nq = size(h, 1)
-    J = metric.J
-    dim=2
-    (ξx, ξy) = (metric.ξx, metric.ξy)
-    (ηx, ηy) = (metric.ηx, metric.ηy)
-    fluxh=Array{DFloat,3}(undef,dim,Nq,Nq)
-    fluxU=Array{DFloat,3}(undef,dim,Nq,Nq)
-    fluxV=Array{DFloat,3}(undef,dim,Nq,Nq)
+    Nq        = size(h, 1)
+    J         = metric.J
+    dim       = 2
+    (ξx, ξy)  = (metric.ξx, metric.ξy)
+    (ηx, ηy)  = (metric.ηx, metric.ηy)
+    fluxh     = Array{DFloat,3}(undef,dim,Nq,Nq)
+    fluxU     = Array{DFloat,3}(undef,dim,Nq,Nq)
+    fluxV     = Array{DFloat,3}(undef,dim,Nq,Nq)
     for e ∈ elems
         #Get primitive variables and fluxes
-        hb=bathymetry[:,:,e]
-        hs=h[:,:,e]
-        ht=hs + hb
-        u=U[:,:,e] ./ ht
-        v=V[:,:,e] ./ ht
-        fluxh[1,:,:]=U[:,:,e]
-        fluxh[2,:,:]=V[:,:,e]
-        fluxU[1,:,:]=(ht .* u .* u + 0.5 .* gravity .* hs .^2) .* δnl + gravity .* hs .* hb
-        fluxU[2,:,:]=(ht .* u .* v) .* δnl
-        fluxV[1,:,:]=(ht .* v .* u) .* δnl
-        fluxV[2,:,:]=(ht .* v .* v + 0.5 .* gravity .* hs .^2) .* δnl + gravity .* hs .* hb
+        hb = bathymetry[:,:,e]
+        hs = h[:,:,e]
+        ht = hs + hb
+        u  = U[:,:,e] ./ ht
+        v  = V[:,:,e] ./ ht
+        fluxh[1,:,:] = U[:,:,e]
+        fluxh[2,:,:] = V[:,:,e]
+        fluxU[1,:,:] = (ht .* u .* u + 0.5 .* gravity .* hs .^2) .* δnl + gravity .* hs .* hb
+        fluxU[2,:,:] = (ht .* u .* v) .* δnl
+        fluxV[1,:,:] = (ht .* v .* u) .* δnl
+        fluxV[2,:,:] = (ht .* v .* v + 0.5 .* gravity .* hs .^2) .* δnl + gravity .* hs .* hb
 
         # loop of ξ-grid lines
         for j = 1:Nq
@@ -388,37 +388,37 @@ end #function volumerhs-2d
 function fluxrhs!(rhs, Q::NamedTuple{S, NTuple{2, T}}, bathymetry, metric, ω, elems, vmapM, vmapP, gravity, N, δnl) where {S, T}
 
     (rhsh, rhsU) = (rhs.h, rhs.U)
-    (h, U) = (Q.h, Q.U)
-    nface = 2
-    (nx, sJ) = (metric.nx, metric.sJ)
-    nx = reshape(nx, size(vmapM))
-    sJ = reshape(sJ, size(vmapM))
+    (h, U)       = (Q.h, Q.U)
+    nface        = 2
+    (nx, sJ)     = (metric.nx, metric.sJ)
+    nx           = reshape(nx, size(vmapM))
+    sJ           = reshape(sJ, size(vmapM))
 
     for e ∈ elems
         for f ∈ 1:nface
             #Compute fluxes on M/Left/- side
-            hsM = h[vmapM[1, f, e]]
-            hbM=bathymetry[vmapM[1, f, e]]
-            hM=hsM + hbM
-            UM = U[vmapM[1, f, e]]
-            uM = UM ./ hM
+            hsM    = h[vmapM[1, f, e]]
+            hbM    = bathymetry[vmapM[1, f, e]]
+            hM     = hsM + hbM
+            UM     = U[vmapM[1, f, e]]
+            uM     = UM ./ hM
             fluxhM = UM
             fluxUM = ( hM .* uM .* uM + 0.5 .* gravity .* hsM .^2) .* δnl + gravity .* hsM .* hbM
 
             #Compute fluxes on P/Right/+ side
-            hsP = h[vmapP[1, f, e]]
-            hbP=bathymetry[vmapP[1, f, e]]
-            hP=hsP + hbP
-            UP = U[vmapP[1, f, e]]
-            uP = UP ./ hP
+            hsP    = h[vmapP[1, f, e]]
+            hbP    = bathymetry[vmapP[1, f, e]]
+            hP     = hsP + hbP
+            UP     = U[vmapP[1, f, e]]
+            uP     = UP ./ hP
             fluxhP = UP
             fluxUP = (hP .* uP .* uP + 0.5 .* gravity .* hsP .^2) .* δnl + gravity .* hsP .* hbP
 
             #Compute wave speed
             nxM = nx[1, f, e]
-            λM=( abs.(nxM .* uM) + sqrt(gravity*hM) ) .* δnl + ( sqrt(gravity*hbM) ) .* (1.0-δnl)
-            λP=( abs.(nxM .* uP) + sqrt(gravity*hP) ) .* δnl + ( sqrt(gravity*hbP) ) .* (1.0-δnl)
-            λ = max.( λM, λP )
+            λM  = ( abs.(nxM .* uM) + sqrt(gravity*hM) ) .* δnl + ( sqrt(gravity*hbM) ) .* (1.0-δnl)
+            λP  = ( abs.(nxM .* uP) + sqrt(gravity*hP) ) .* δnl + ( sqrt(gravity*hbP) ) .* (1.0-δnl)
+            λ   = max.( λM, λP )
 
             #Compute Numerical Flux and Update
             fluxh_star = (nxM .* (fluxhM + fluxhP) - λ .* (hsP - hsM)) / 2
@@ -433,26 +433,26 @@ end #function fluxrhs-1d
 function fluxrhs!(rhs, Q::NamedTuple{S, NTuple{3, T}}, bathymetry, metric, ω, elems, vmapM, vmapP, gravity, N, δnl) where {S, T}
     (rhsh, rhsU, rhsV) = (rhs.h, rhs.U, rhs.V)
     (h, U, V) = (Q.h, Q.U, Q.V)
-    nface = 4
-    Nq=N+1
-    dim=2
+    nface     = 4
+    Nq        = N+1
+    dim       = 2
     (nx, ny, sJ) = (metric.nx, metric.ny, metric.sJ)
-    fluxhM=Array{DFloat,2}(undef,dim,Nq)
-    fluxUM=Array{DFloat,2}(undef,dim,Nq)
-    fluxVM=Array{DFloat,2}(undef,dim,Nq)
-    fluxhP=Array{DFloat,2}(undef,dim,Nq)
-    fluxUP=Array{DFloat,2}(undef,dim,Nq)
-    fluxVP=Array{DFloat,2}(undef,dim,Nq)
+    fluxhM = Array{DFloat,2}(undef,dim,Nq)
+    fluxUM = Array{DFloat,2}(undef,dim,Nq)
+    fluxVM = Array{DFloat,2}(undef,dim,Nq)
+    fluxhP = Array{DFloat,2}(undef,dim,Nq)
+    fluxUP = Array{DFloat,2}(undef,dim,Nq)
+    fluxVP = Array{DFloat,2}(undef,dim,Nq)
     for e ∈ elems
         for f ∈ 1:nface
             #Compute fluxes on M/Left/- side
             hsM = h[vmapM[:, f, e]]
-            hbM=bathymetry[vmapM[:, f, e]]
-            hM=hsM + hbM
-            UM = U[vmapM[:, f, e]]
-            uM = UM ./ hM
-            VM = V[vmapM[:, f, e]]
-            vM = VM ./ hM
+            hbM = bathymetry[vmapM[:, f, e]]
+            hM  = hsM + hbM
+            UM  = U[vmapM[:, f, e]]
+            uM  = UM ./ hM
+            VM  = V[vmapM[:, f, e]]
+            vM  = VM ./ hM
             fluxhM[1,:] = UM
             fluxhM[2,:] = VM
             fluxUM[1,:] = ( hM .* uM .* uM + 0.5 .* gravity .* hsM .^2) .* δnl + gravity .* hsM .* hbM
@@ -462,12 +462,12 @@ function fluxrhs!(rhs, Q::NamedTuple{S, NTuple{3, T}}, bathymetry, metric, ω, e
 
             #Compute fluxes on P/right/+ side
             hsP = h[vmapP[:, f, e]]
-            hbP=bathymetry[vmapP[:, f, e]]
-            hP=hsP + hbP
-            UP = U[vmapP[:, f, e]]
-            uP = UP ./ hP
-            VP = V[vmapP[:, f, e]]
-            vP = VP ./ hP
+            hbP = bathymetry[vmapP[:, f, e]]
+            hP  = hsP + hbP
+            UP  = U[vmapP[:, f, e]]
+            uP  = UP ./ hP
+            VP  = V[vmapP[:, f, e]]
+            vP  = VP ./ hP
             fluxhP[1,:] = UP
             fluxhP[2,:] = VP
             fluxUP[1,:] = ( hP .* uP .* uP + 0.5 .* gravity .* hsP .^2) .* δnl + gravity .* hsP .* hbP
@@ -478,9 +478,9 @@ function fluxrhs!(rhs, Q::NamedTuple{S, NTuple{3, T}}, bathymetry, metric, ω, e
             #Compute wave speed
             nxM = nx[:, f, e]
             nyM = ny[:, f, e]
-            λM=( abs.(nxM .* uM + nyM .* vM) + sqrt.(gravity*hM) ) .* δnl + ( sqrt.(gravity*hbM) ) .* (1.0-δnl)
-            λP=( abs.(nxM .* uP + nyM .* vP) + sqrt.(gravity*hP) ) .* δnl + ( sqrt.(gravity*hbP) ) .* (1.0-δnl)
-            λ = max.( λM, λP )
+            λM  = ( abs.(nxM .* uM + nyM .* vM) + sqrt.(gravity*hM) ) .* δnl + ( sqrt.(gravity*hbM) ) .* (1.0-δnl)
+            λP  = ( abs.(nxM .* uP + nyM .* vP) + sqrt.(gravity*hP) ) .* δnl + ( sqrt.(gravity*hbP) ) .* (1.0-δnl)
+            λ   = max.( λM, λP )
 
             #Compute Numerical Flux and Update
             fluxh_star = (nxM .* (fluxhM[1,:] + fluxhP[1,:]) + nyM .* (fluxhM[2,:] + fluxhP[2,:]) - λ .* (hsP - hsM)) / 2
@@ -543,9 +543,9 @@ end #function update-2d
 # ### Compute L2 Error Norm for:
 # 1D Error
 function L2energy(Q::NamedTuple{S, NTuple{2, T}}, metric, ω, elems) where {S, T}
-  J = metric.J
-  Nq = length(ω)
-  M = ω
+  J     = metric.J
+  Nq    = length(ω)
+  M     = ω
   index = CartesianIndices(ntuple(j->1:Nq, Val(1)))
 
   energy = [zero(J[1])]
@@ -561,9 +561,9 @@ end #end function L2energy-1d
 
 # 2D Error
 function L2energy(Q::NamedTuple{S, NTuple{3, T}}, metric, ω, elems) where {S, T}
-  J = metric.J
-  Nq = length(ω)
-  M = reshape(kron(ω, ω), Nq, Nq)
+  J     = metric.J
+  Nq    = length(ω)
+  M     = reshape(kron(ω, ω), Nq, Nq)
   index = CartesianIndices(ntuple(j->1:Nq, Val(2)))
 
   energy = [zero(J[1])]
