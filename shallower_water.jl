@@ -36,7 +36,7 @@ function simulate(tend, base_dt, mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, g, X
                 U⃗ₑ         = U⃗[elem]
 
                 Δh[elem]  += ∫∇Ψ(dX⃗ * U⃗ₑ * J)
-                ΔU⃗[elem]  += ∫∇Ψ(dX⃗ * (U⃗ₑ * U⃗ₑ' / htₑ + g * (htₑ^2 - hbₑ^2)/2 * I) * J)
+                ΔU⃗[elem]  += ∫∇Ψ(dX⃗ * (U⃗ₑ * (U⃗ₑ' / htₑ) + g * 0.5 * (htₑ^2 - hbₑ^2) * I) * J)
             end
             end
 
@@ -67,9 +67,9 @@ function simulate(tend, base_dt, mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, g, X
 
                     Δhₑ[face]  -= ∫Ψ(((U⃗ₑ + other_U⃗ₑ)' * normal(face) - λ * (other_hₑ - hₑ)) / 2 * face_J)
 
-                    flux       =  (      U⃗ₑ *       U⃗ₑ' /       htₑ + g * (      htₑ^2 -       hbₑ^2) / 2 * I)
-                    other_flux =  (other_U⃗ₑ * other_U⃗ₑ' / other_htₑ + g * (other_htₑ^2 - other_hbₑ^2) / 2 * I)
-                    ΔU⃗ₑ[face]  -= ∫Ψ(((flux + other_flux)' * normal(face) - λ * (other_U⃗ₑ - U⃗ₑ)) / 2 * face_J)
+                    flux       =  (      U⃗ₑ * (      U⃗ₑ' /       htₑ) + g * 0.5 * (      htₑ^2 -       hbₑ^2) * I)
+                    other_flux =  (other_U⃗ₑ * (other_U⃗ₑ' / other_htₑ) + g * 0.5 * (other_htₑ^2 - other_hbₑ^2) * I)
+                    ΔU⃗ₑ[face]  -= ∫Ψ(((flux + other_flux)' * normal(face) - λ * 0.5 * (other_U⃗ₑ - U⃗ₑ)) * face_J)
                 end
                 Δh[elem] = LinearCombinationFun(Δhₑ.basis, SArray(Δhₑ.coeffs))
                 ΔU⃗[elem] = LinearCombinationFun(ΔU⃗ₑ.basis, SArray(ΔU⃗ₑ.coeffs))
@@ -82,8 +82,8 @@ function simulate(tend, base_dt, mesh, h, bathymetry, U⃗, Δh, ΔU⃗, J, g, X
             overelems(mesh, h, U⃗, Δh, ΔU⃗, M, rka, rkb, dt) do elem, mesh, h, U⃗, Δh, ΔU⃗, M, rka, rkb, dt
             @inbounds begin
                 ## Assuming advection == false
-                h[elem] += rkb * dt * Δh[elem] / M
-                U⃗[elem] += rkb * dt * ΔU⃗[elem] / M
+                h[elem] += (rkb * dt / M) * Δh[elem]
+                U⃗[elem] += (rkb * dt / M) * ΔU⃗[elem]
                 Δh[elem] *= rka
                 ΔU⃗[elem] *= rka
             end

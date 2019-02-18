@@ -27,6 +27,7 @@ function storage(::Type{T}, mesh::GhostCartesianMesh{N, GPU}) where {T, N}
     return OffsetArray(underlying, inds)
 end
 
+const LAUNCH_LOG = Dict{Symbol, Bool}()
 function overelems(f::F, mesh::CartesianMesh{N, GPU}, args...) where {F, N}
 
     function kernelf(f::F, elems, mesh, args...) where F
@@ -50,10 +51,14 @@ function overelems(f::F, mesh::CartesianMesh{N, GPU}, args...) where {F, N}
         threads = min(n, CUDAnative.maxthreads(kernel))
         blocks = ceil(Int, n / threads)
 
-        # @info("kernel configuration", N, threads, blocks,
-        #     CUDAnative.maxthreads(kernel),
-        #     CUDAnative.registers(kernel),
-        #     CUDAnative.memory(kernel))
+	fname = nameof(f)
+	if !haskey(LAUNCH_LOG, fname)
+            @info("kernel configuration", fname, N, threads, blocks,
+                  CUDAnative.maxthreads(kernel),
+                  CUDAnative.registers(kernel),
+                  CUDAnative.memory(kernel))
+            LAUNCH_LOG[fname] = true
+        end
 
         kernel(kernel_args...; threads=threads, blocks=blocks)
     end
